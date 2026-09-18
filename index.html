@@ -1,0 +1,2788 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="msapplication-tap-highlight" content="no">
+<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#000">
+<title>БЕЗДНА</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; background: #000; overflow: hidden;
+    font-family: 'Courier New', monospace; color: #8fffc8;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  #game {
+    position: relative; width: 100vw; height: 100dvh;
+    overflow: hidden; background: #000;
+  }
+  #cabinWindow {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 82%; height: 62%;
+    max-width: 950px;
+    border-radius: 45% 45% 8% 8% / 40% 40% 6% 6%;
+    border: 10px solid #1a1a1a;
+    overflow: hidden;
+    z-index: 3;
+    transition: box-shadow 0.8s, border-color 0.8s;
+    box-shadow:
+      inset 0 0 100px rgba(0,0,0,0.9),
+      inset 0 0 200px rgba(0,60,80,0.3),
+      0 0 60px rgba(0,60,80,0.4);
+  }
+  #cabinWindow::after {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 15%, rgba(255,255,255,0.08) 0%, transparent 25%),
+      radial-gradient(ellipse at 80% 25%, rgba(255,255,255,0.05) 0%, transparent 20%);
+    pointer-events: none;
+    z-index: 5;
+  }
+  #oceanView {
+    position: absolute; inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    transition: background 1.2s;
+  }
+  #interior {
+    position: absolute; inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  .room-piece {
+    position: absolute;
+    background: linear-gradient(180deg, #1c2520 0%, #0a120e 100%);
+    border: 1px solid #2a4a3a;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
+    border-radius: 3px;
+  }
+  .pipe {
+    position: absolute;
+    background: linear-gradient(90deg, #2a2a2a 0%, #4a4a4a 30%, #2a2a2a 60%, #1a1a1a 100%);
+    border-radius: 4px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+  }
+  .cable {
+    position: absolute;
+    background: #1a1a1a;
+    border-radius: 2px;
+    box-shadow: 0 0 3px rgba(0,0,0,0.7);
+  }
+  .led {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #300;
+    transition: all 0.3s;
+    box-shadow: 0 0 3px rgba(255,0,0,0.4);
+  }
+  .led.on { background: #3f3; box-shadow: 0 0 12px #3f3; }
+  .led.warn { background: #fa0; box-shadow: 0 0 12px #fa0; }
+  .led.err { background: #f00; box-shadow: 0 0 15px #f00; animation: blinkLed 0.6s infinite; }
+  @keyframes blinkLed { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .crack {
+    position: absolute; z-index: 4;
+    width: 1px; height: 30px;
+    background: rgba(200,220,220,0.25);
+    transform-origin: top left;
+    pointer-events: none;
+  }
+  .particle {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: rgba(143,255,200,0.5);
+    border-radius: 50%;
+    animation: float linear infinite;
+    pointer-events: none;
+  }
+  @keyframes float {
+    0% { transform: translateY(0) translateX(0); opacity: 0; }
+    10% { opacity: 0.7; }
+    90% { opacity: 0.5; }
+    100% { transform: translateY(-80vh) translateX(20px); opacity: 0; }
+  }
+
+  #creature {
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2s, left 1.2s linear, top 1.2s linear, transform 3s;
+    filter: blur(1.5px) drop-shadow(0 0 40px rgba(0,0,0,0.9));
+    transform: scale(1);
+    width: 200px; height: 200px;
+  }
+  #creature.visible { opacity: 0.85; }
+  #creature.fleeing {
+    opacity: 0;
+    transform: translateY(50vh) scale(0.7);
+    transition: opacity 1.5s, transform 2.5s;
+  }
+  #creature.attacking {
+    opacity: 1;
+    transform: scale(3.5);
+    transition: all 3s ease-in;
+    filter: blur(0px) drop-shadow(0 0 60px #f00);
+  }
+  #creatureSvg { width: 100%; height: 100%; display: block; }
+  .eye {
+    fill: #ff3030;
+    filter: drop-shadow(0 0 8px #ff0000) drop-shadow(0 0 20px #800000);
+    animation: eyePulse 3s infinite;
+  }
+  @keyframes eyePulse {
+    0%,100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  #hud {
+    position: absolute; top: 12px; left: 0; right: 0;
+    padding: 8px 16px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    display: flex; justify-content: space-between;
+    font-size: 11px; z-index: 20;
+    text-shadow: 0 0 8px #8fffc8; letter-spacing: 1px;
+    pointer-events: none;
+  }
+  #hud .col { display: flex; flex-direction: column; gap: 4px; }
+  .bar {
+    width: 120px; height: 8px;
+    border: 1px solid #8fffc8; background: rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bar-fill { height: 100%; transition: width 0.4s; }
+  #energyFill { background: linear-gradient(90deg, #ffe066, #ff7b00); }
+  #repairFill { background: linear-gradient(90deg, #3bff8b, #8fffc8); }
+
+  #timerWrap {
+    position: absolute; top: 60px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 20; text-align: center;
+    font-size: 10px; letter-spacing: 3px;
+    color: #ffe066; text-shadow: 0 0 15px #ffe066;
+    pointer-events: none;
+  }
+  #timerValue {
+    font-size: 22px; letter-spacing: 4px;
+    font-weight: bold; margin-top: 2px;
+    transition: color 0.4s;
+  }
+  #timerValue.warn {
+    color: #ff8a8a; text-shadow: 0 0 20px #ff0000;
+    animation: timerPulse 0.6s infinite;
+  }
+  @keyframes timerPulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+
+  #sonar {
+    position: absolute;
+    top: 12px; right: 16px;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,40,30,0.9) 0%, rgba(0,15,10,0.95) 100%);
+    border: 2px solid #2a6b5c;
+    box-shadow: 0 0 25px rgba(0,80,60,0.6), inset 0 0 30px rgba(0,80,60,0.4);
+    z-index: 25;
+    overflow: hidden;
+  }
+  #sonar::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle, transparent 30%, rgba(143,255,200,0.15) 31%, transparent 32%),
+      radial-gradient(circle, transparent 60%, rgba(143,255,200,0.12) 61%, transparent 62%),
+      radial-gradient(circle, transparent 88%, rgba(143,255,200,0.1) 89%, transparent 90%);
+    pointer-events: none;
+  }
+  #sonar::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      linear-gradient(0deg, transparent calc(50% - 1px), rgba(143,255,200,0.15) 50%, transparent calc(50% + 1px)),
+      linear-gradient(90deg, transparent calc(50% - 1px), rgba(143,255,200,0.15) 50%, transparent calc(50% + 1px));
+    pointer-events: none;
+  }
+  #sonarSweep {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 50%; height: 2px;
+    transform-origin: 0% 50%;
+    background: linear-gradient(90deg, rgba(143,255,200,0.9) 0%, rgba(143,255,200,0) 100%);
+    box-shadow: 0 0 15px rgba(143,255,200,0.8);
+    animation: sweep 3s linear infinite;
+    border-radius: 1px;
+  }
+  @keyframes sweep {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  #sonarCenter {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px; height: 12px;
+    background: #8fffc8;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #8fffc8, 0 0 30px #8fffc8;
+    z-index: 3;
+  }
+  #sonarBlip {
+    position: absolute;
+    width: 10px; height: 10px;
+    background: #ff3030;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #ff0000, 0 0 30px #800000;
+    z-index: 4;
+    opacity: 0;
+    transition: left 1s linear, top 1s linear, opacity 0.5s;
+    animation: blipPulse 0.8s infinite;
+  }
+  @keyframes blipPulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+  }
+  #sonarBlip::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border: 2px solid rgba(255,50,50,0.6);
+    border-radius: 50%;
+    animation: blipRing 1.6s infinite;
+  }
+  @keyframes blipRing {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+  #sonarLabel {
+    position: absolute;
+    bottom: 4px; left: 0; right: 0;
+    text-align: center;
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: rgba(143,255,200,0.5);
+    z-index: 5;
+  }
+
+  #taskPanel {
+    position: absolute;
+    bottom: 90px; left: 50%;
+    transform: translateX(-50%);
+    width: 92%; max-width: 520px;
+    z-index: 15;
+    background: rgba(0, 18, 24, 0.96);
+    border: 1px solid #2a6b5c;
+    border-radius: 6px;
+    padding: 16px 18px;
+    box-shadow: 0 0 40px rgba(0,80,60,0.5), inset 0 0 30px rgba(0,80,60,0.15);
+    max-height: 48vh;
+    overflow-y: auto;
+    display: none;
+    pointer-events: auto;
+  }
+  #taskPanel.show { display: block; animation: slideUp 0.3s; }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  h2 { font-size: 14px; margin-bottom: 10px; letter-spacing: 2px; color: #ffe066; text-align:center;}
+  p { margin-bottom: 10px; line-height: 1.5; font-size: 12px; color: #a8e6cf; text-align:center;}
+  input {
+    font-family: inherit; padding: 10px;
+    background: rgba(0,0,0,0.7); color: #ffe066;
+    border: 1px solid #8fffc8; border-radius: 3px;
+    font-size: 18px; text-align: center; letter-spacing: 5px;
+    width: 150px; outline: none; min-height: 44px;
+  }
+  input:focus { box-shadow: 0 0 20px #8fffc8; }
+  .input-row { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  button {
+    font-family: inherit; padding: 10px 18px; margin: 4px;
+    background: transparent; color: #8fffc8;
+    border: 1px solid #8fffc8; border-radius: 3px;
+    cursor: pointer; font-size: 13px; letter-spacing: 1px;
+    text-shadow: 0 0 5px #8fffc8;
+    touch-action: manipulation; min-height: 44px;
+    transition: all 0.15s;
+  }
+  button:active:not(:disabled) {
+    background: #8fffc8; color: #001a14;
+    box-shadow: 0 0 25px #8fffc8; text-shadow: none;
+    transform: scale(0.97);
+  }
+  @media (hover:hover) {
+    button:hover:not(:disabled) {
+      background: #8fffc8; color: #001a14;
+      box-shadow: 0 0 25px #8fffc8; text-shadow: none;
+    }
+  }
+  .code-display {
+    font-size: 24px; letter-spacing: 8px; margin: 12px 0;
+    color: #ff5e5e; text-align: center;
+    text-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000;
+    animation: glitch 4s infinite;
+  }
+  @keyframes glitch {
+    0%,95%,100% { transform: translate(0); }
+    96% { transform: translate(-3px,2px); }
+    97% { transform: translate(3px,-2px); }
+    98% { transform: translate(-2px,-1px); }
+  }
+  .symbols {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 12px 0;
+  }
+  .symbols .sym {
+    font-size: 22px; padding: 8px 12px;
+    cursor: pointer; transition: all 0.15s;
+    border: 1px solid rgba(143,255,200,0.3);
+    border-radius: 6px;
+    min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,40,30,0.4);
+    flex-direction: column;
+  }
+  .symbols .sym:active { background: rgba(143,255,200,0.3); transform: scale(0.95); }
+  @media (hover:hover) {
+    .symbols .sym:hover { color: #fff; text-shadow: 0 0 15px #fff; background: rgba(143,255,200,0.15); }
+  }
+  .symbols .sym small { font-size: 8px; opacity: 0.4; }
+  .wires { display: flex; justify-content: center; gap: 12px; margin: 16px 0; flex-wrap: wrap;}
+  .wire {
+    width: 40px; height: 110px; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s;
+    border: 2px solid rgba(255,255,255,0.35);
+  }
+  .wire:active { transform: scale(0.94); }
+  @media (hover:hover) {
+    .wire:hover { transform: scale(1.06); box-shadow: 0 0 25px currentColor; }
+  }
+  .switch {
+    padding: 12px 16px; min-width: 70px; min-height: 50px;
+    background: #1a1010;
+    border: 2px solid #4a2020;
+    border-radius: 6px;
+    color: #a06060;
+    font-size: 12px; letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: inherit;
+  }
+  .switch:active { transform: scale(0.95); }
+  .switch.up {
+    background: #0a2010;
+    border-color: #3f8b5a;
+    color: #8fffc8;
+    box-shadow: 0 0 15px rgba(63,139,90,0.5);
+  }
+  .switches-row {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 12px 0;
+  }
+  .math-row {
+    display: flex; justify-content: center; gap: 10px;
+    margin: 12px 0; flex-wrap: wrap;
+  }
+  .math-btn {
+    padding: 12px 18px;
+    min-width: 60px; min-height: 50px;
+    background: rgba(0,40,30,0.5);
+    border: 1px solid #8fffc8;
+    border-radius: 6px;
+    color: #8fffc8;
+    font-size: 20px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    font-weight: bold;
+  }
+  .math-btn:active { background: rgba(143,255,200,0.3); transform: scale(0.95); }
+  @media (hover:hover) {
+    .math-btn:hover { background: #8fffc8; color: #000; box-shadow: 0 0 20px #8fffc8; }
+  }
+
+  #spotlight {
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 50%,
+      rgba(255,255,200,0.5) 0%,
+      rgba(255,255,200,0.2) 25%,
+      transparent 60%);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s; z-index: 7;
+  }
+  #spotlight.on { opacity: 1; }
+
+  #flashBtn {
+    position: absolute;
+    bottom: 90px; right: 16px;
+    min-height: 60px; min-width: 80px;
+    font-size: 12px;
+    border: 2px solid #ffe066;
+    color: #ffe066;
+    background: rgba(0,0,0,0.85);
+    box-shadow: 0 0 20px rgba(255,224,102,0.4);
+    border-radius: 50%;
+    width: 90px; height: 90px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: inherit; cursor: pointer;
+    z-index: 30; letter-spacing: 1px;
+    transition: all 0.15s;
+    touch-action: manipulation;
+  }
+  #flashBtn .icon { font-size: 24px; }
+  #flashBtn .label { font-size: 9px; margin-top: 2px; }
+  #flashBtn:active:not(:disabled) {
+    background: #ffe066; color: #000;
+    box-shadow: 0 0 50px #ffe066;
+    transform: scale(0.93);
+  }
+  @media (hover:hover) {
+    #flashBtn:hover:not(:disabled) {
+      background: #ffe066; color: #000;
+      box-shadow: 0 0 50px #ffe066;
+    }
+  }
+  #flashBtn:disabled { opacity: 0.3; }
+
+  .shake { animation: shake 0.4s; }
+  @keyframes shake {
+    0%,100% { transform: translate(0,0) rotate(0); }
+    20% { transform: translate(-8px,4px) rotate(-0.5deg); }
+    40% { transform: translate(7px,-6px) rotate(0.6deg); }
+    60% { transform: translate(-5px,5px) rotate(-0.4deg); }
+    80% { transform: translate(6px,-3px) rotate(0.3deg); }
+  }
+  .shake-hard { animation: shakeHard 0.6s; }
+  @keyframes shakeHard {
+    0%,100% { transform: translate(0,0); }
+    10% { transform: translate(-20px,10px); }
+    30% { transform: translate(18px,-15px); }
+    50% { transform: translate(-15px,12px); }
+    70% { transform: translate(12px,-10px); }
+    90% { transform: translate(-8px,5px); }
+  }
+
+  #vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.85) 100%);
+    pointer-events: none; z-index: 8;
+    transition: background 1s;
+  }
+  #noise {
+    position: absolute; inset: 0; pointer-events: none;
+    opacity: 0.06; z-index: 9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: noiseShift 0.15s steps(2) infinite;
+    transition: opacity 1s;
+  }
+  @keyframes noiseShift {
+    0% { transform: translate(0,0); }
+    50% { transform: translate(-2px,1px); }
+    100% { transform: translate(1px,-2px); }
+  }
+
+  /* ЗАТОПЛЕНИЕ */
+  #flood {
+    position: absolute; inset: 0;
+    pointer-events: none; z-index: 6;
+    opacity: 0;
+    transition: opacity 1s;
+  }
+  #floodWater {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 0%;
+    background: linear-gradient(180deg, rgba(40,120,150,0.55) 0%, rgba(20,70,100,0.85) 100%);
+    transition: height 3s ease-out;
+    box-shadow: 0 0 40px rgba(100,200,255,0.5);
+  }
+  #floodWater::before {
+    content: '';
+    position: absolute;
+    top: -6px; left: 0; right: 0;
+    height: 12px;
+    background: radial-gradient(ellipse at center, rgba(180,230,255,0.6) 0%, transparent 70%);
+    animation: waterWave 2s ease-in-out infinite alternate;
+  }
+  @keyframes waterWave {
+    0% { transform: translateX(-20px); }
+    100% { transform: translateX(20px); }
+  }
+  #leaks {
+    position: absolute; inset: 0; pointer-events: none;
+    z-index: 6;
+    opacity: 0;
+    transition: opacity 1s;
+  }
+  .leak {
+    position: absolute;
+    width: 3px;
+    background: linear-gradient(180deg, rgba(180,230,255,0.7) 0%, rgba(180,230,255,0) 100%);
+    border-radius: 2px;
+    animation: leakFall linear infinite;
+  }
+  @keyframes leakFall {
+    0% { height: 20px; opacity: 0.9; }
+    100% { height: 200px; opacity: 0; transform: translateY(100px); }
+  }
+
+  /* ПОЖАР */
+  #fire {
+    position: absolute; inset: 0;
+    pointer-events: none; z-index: 6;
+    opacity: 0;
+    transition: opacity 1s;
+  }
+  #fireGlow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 15% 85%, rgba(255,100,0,0.7) 0%, transparent 35%),
+      radial-gradient(ellipse at 85% 75%, rgba(255,60,0,0.6) 0%, transparent 30%),
+      radial-gradient(ellipse at 50% 95%, rgba(255,150,0,0.4) 0%, transparent 40%);
+    animation: fireFlicker 0.3s infinite alternate;
+  }
+  @keyframes fireFlicker {
+    0% { opacity: 0.85; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.03); }
+  }
+  .flame {
+    position: absolute;
+    bottom: 0;
+    width: 30px;
+    height: 60px;
+    background: radial-gradient(ellipse at 50% 100%, #fff700 0%, #ff8800 40%, #ff2200 70%, transparent 100%);
+    border-radius: 50% 50% 30% 30%;
+    filter: blur(2px);
+    animation: flameDance 0.6s ease-in-out infinite alternate;
+    pointer-events: none;
+    opacity: 0.85;
+  }
+  @keyframes flameDance {
+    0% { transform: translateY(0) scale(1, 1) skewX(-3deg); }
+    100% { transform: translateY(-8px) scale(1.1, 1.15) skewX(4deg); }
+  }
+  #smoke {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 20% 60%, rgba(40,40,40,0.7) 0%, transparent 40%),
+      radial-gradient(ellipse at 80% 50%, rgba(50,50,50,0.6) 0%, transparent 35%),
+      radial-gradient(ellipse at 50% 30%, rgba(60,60,60,0.5) 0%, transparent 40%);
+    animation: smokeRise 6s ease-in-out infinite alternate;
+    opacity: 0.5;
+  }
+  @keyframes smokeRise {
+    0% { transform: translateY(0) scale(1); opacity: 0.4; }
+    100% { transform: translateY(-20px) scale(1.1); opacity: 0.7; }
+  }
+
+  #alertOverlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,0.4) 100%);
+    opacity: 0;
+    z-index: 10;
+    transition: opacity 0.5s;
+  }
+  #alertOverlay.show {
+    opacity: 1;
+    animation: alertPulse 0.7s infinite;
+  }
+  @keyframes alertPulse {
+    0%,100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+
+  #eventBanner {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 90;
+    text-align: center;
+    font-size: 28px;
+    letter-spacing: 6px;
+    font-weight: bold;
+    padding: 20px 40px;
+    background: rgba(0,0,0,0.85);
+    border: 2px solid #ff3030;
+    border-radius: 8px;
+    color: #ff3030;
+    text-shadow: 0 0 20px #ff0000;
+    display: none;
+    pointer-events: none;
+    max-width: 90vw;
+  }
+  #eventBanner.show {
+    display: block;
+    animation: eventFlash 2.5s;
+  }
+  #eventBanner.flood {
+    border-color: #4ebaff;
+    color: #4ebaff;
+    text-shadow: 0 0 20px #4ebaff;
+  }
+  #eventBanner.fire {
+    border-color: #ff8800;
+    color: #ff8800;
+    text-shadow: 0 0 20px #ff4400;
+  }
+  @keyframes eventFlash {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+    25% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+  }
+
+  #log {
+    position: absolute;
+    bottom: 195px; left: 16px; right: 16px;
+    text-align: center; font-size: 12px;
+    color: #ff8a8a; letter-spacing: 1px;
+    text-shadow: 0 0 10px #ff0000;
+    min-height: 18px; pointer-events: none;
+    z-index: 25;
+  }
+
+  #map {
+    position: absolute;
+    top: 12px; left: 16px;
+    display: flex; flex-direction: column; gap: 3px;
+    z-index: 25;
+    padding: 6px 8px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(143,255,200,0.3);
+    border-radius: 6px;
+  }
+  .map-room {
+    padding: 3px 8px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: rgba(143,255,200,0.4);
+    border-left: 2px solid rgba(143,255,200,0.2);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .map-room.current {
+    color: #8fffc8;
+    background: rgba(143,255,200,0.15);
+    border-left-color: #8fffc8;
+    box-shadow: 0 0 10px rgba(143,255,200,0.3);
+  }
+  .map-room.done {
+    color: #ffe066;
+    border-left-color: #ffe066;
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+
+  #navBar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 10px;
+    z-index: 30;
+    pointer-events: none;
+  }
+  .nav-btn {
+    pointer-events: auto;
+    padding: 12px 16px;
+    min-width: 84px; min-height: 52px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    background: rgba(0,20,25,0.9);
+    border: 1px solid #8fffc8;
+    color: #8fffc8;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    text-shadow: 0 0 8px #8fffc8;
+    transition: all 0.15s;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px;
+    touch-action: manipulation;
+  }
+  .nav-btn .icon { font-size: 16px; }
+  .nav-btn:active:not(:disabled) {
+    background: #8fffc8; color: #000;
+    text-shadow: none;
+    transform: scale(0.95);
+  }
+  @media (hover:hover) {
+    .nav-btn:hover:not(:disabled) {
+      background: #8fffc8; color: #000;
+      box-shadow: 0 0 25px #8fffc8;
+      text-shadow: none;
+    }
+  }
+  .nav-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+  #death, #win {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; text-align: center; padding: 20px;
+  }
+  #death { background: #000; color: #ff2b2b; text-shadow: 0 0 30px #ff0000; }
+  #death.show { display: flex; animation: fadeIn 3s; }
+  #win {
+    background: linear-gradient(180deg, #001a2e 0%, #004466 100%);
+    color: #8fffc8; text-shadow: 0 0 20px #8fffc8;
+  }
+  #win.show { display: flex; animation: fadeIn 2s; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  #death h1 { font-size: 34px; letter-spacing: 8px; margin-bottom: 16px; }
+  #win h1 { font-size: 30px; letter-spacing: 5px; margin-bottom: 16px; }
+  #death p, #win p { font-size: 14px; margin-bottom: 22px; color: inherit; max-width: 500px; line-height: 1.6; }
+
+  /* Экран поедания */
+  #eatScene {
+    position: absolute; inset: 0;
+    background: #000;
+    display: none;
+    z-index: 150;
+    overflow: hidden;
+  }
+  #eatScene.show { display: block; }
+  #eatMouth {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px; height: 40px;
+    background: radial-gradient(circle, #500 0%, #000 70%);
+    border-radius: 50%;
+    box-shadow: 0 0 100px 40px rgba(80,0,0,0.8), inset 0 0 30px #000;
+    animation: mouthOpen 4s ease-in forwards;
+  }
+  @keyframes mouthOpen {
+    0% { width: 40px; height: 40px; }
+    100% { width: 300vmax; height: 300vmax; }
+  }
+  #eatTeeth {
+    position: absolute; inset: 0;
+    background-image:
+      repeating-conic-gradient(from 0deg, #ddd 0deg 2deg, #600 2deg 4deg),
+      repeating-conic-gradient(from 45deg, #bbb 0deg 3deg, #400 3deg 6deg);
+    border-radius: 50%;
+    opacity: 0.3;
+    animation: teethSpin 4s linear forwards;
+  }
+  @keyframes teethSpin {
+    from { transform: rotate(0); }
+    to { transform: rotate(720deg); }
+  }
+  #eatText {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 16px;
+    letter-spacing: 6px;
+    z-index: 2;
+    text-shadow: 0 0 20px #f00;
+    animation: eatTextFade 4s forwards;
+    text-align: center;
+  }
+  @keyframes eatTextFade {
+    0%,70% { opacity: 0; }
+    85% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  #intro {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, #04212b 0%, #000 80%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 200; text-align: center; padding: 24px;
+    color: #8fffc8;
+    overflow-y: auto;
+  }
+  #intro h1 {
+    font-size: 28px; letter-spacing: 10px;
+    margin-bottom: 22px;
+    text-shadow: 0 0 25px #8fffc8;
+    animation: flicker 2.5s infinite;
+  }
+  @keyframes flicker {
+    0%,19%,21%,23%,25%,54%,56%,100% { opacity: 1; }
+    20%,24%,55% { opacity: 0.4; }
+  }
+  #intro p {
+    max-width: 540px; font-size: 13px; line-height: 1.7;
+    margin-bottom: 12px; color: #a8e6cf;
+  }
+  #intro .warn { color: #ff5e5e; text-shadow: 0 0 12px #ff0000; }
+  #intro .secret { color: #ffd166; text-shadow: 0 0 12px #ffd166; font-size: 12px; }
+  #intro button {
+    margin-top: 16px; padding: 16px 48px;
+    font-size: 15px; letter-spacing: 3px;
+    border: 2px solid #8fffc8; min-height: 56px;
+  }
+
+  #controls {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 92%; max-width: 500px;
+    background: rgba(0,20,25,0.96);
+    border: 1px solid #8fffc8;
+    border-radius: 8px;
+    padding: 22px 24px;
+    z-index: 300;
+    display: none;
+    text-align: left;
+    box-shadow: 0 0 40px rgba(143,255,200,0.3);
+  }
+  #controls.show { display: block; animation: fadeIn 0.4s; }
+  #controls h2 { font-size: 16px; margin-bottom: 14px; color: #ffe066; text-align:center; letter-spacing: 3px;}
+  #controls .row {
+    display: flex; justify-content: space-between;
+    padding: 7px 0; border-bottom: 1px dashed rgba(143,255,200,0.15);
+    font-size: 12px; color: #a8e6cf;
+  }
+  #controls .key { color: #ffe066; font-weight: bold; }
+
+  /* ============ ЭКРАНЫ КОНЦОВОК ============ */
+  .ending {
+    position: absolute; inset: 0;
+    display: none;
+    z-index: 500;
+    overflow: hidden;
+  }
+  .ending.show { display: block; }
+
+  /* --- КОНЦОВКА 1: ХОРОШАЯ (подъём) --- */
+  #endingGood {
+    background: linear-gradient(180deg, #000 0%, #001830 100%);
+  }
+  #goodSky {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg,
+      #0a2a4a 0%,
+      #1a4a6a 30%,
+      #2a6a8a 60%,
+      #4a9ac0 100%);
+    opacity: 0;
+    animation: goodSkyFade 8s ease-in forwards;
+  }
+  @keyframes goodSkyFade {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  #goodSun {
+    position: absolute;
+    top: 20%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px; height: 100px;
+    background: radial-gradient(circle, #fff8b0 0%, #ffdd55 40%, rgba(255,200,80,0) 80%);
+    border-radius: 50%;
+    box-shadow: 0 0 100px #ffdd55, 0 0 200px rgba(255,200,80,0.6);
+    opacity: 0;
+    animation: goodSunRise 8s ease-out forwards;
+  }
+  @keyframes goodSunRise {
+    0% { opacity: 0; transform: translate(-50%, 60%); }
+    100% { opacity: 1; transform: translate(-50%, -50%); }
+  }
+  #goodRays {
+    position: absolute;
+    top: 20%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px; height: 400px;
+    background:
+      conic-gradient(from 0deg,
+        transparent 0deg, rgba(255,240,150,0.3) 10deg, transparent 20deg,
+        transparent 30deg, rgba(255,240,150,0.25) 40deg, transparent 50deg,
+        transparent 70deg, rgba(255,240,150,0.3) 80deg, transparent 90deg,
+        transparent 110deg, rgba(255,240,150,0.25) 120deg, transparent 130deg,
+        transparent 160deg, rgba(255,240,150,0.3) 170deg, transparent 180deg,
+        transparent 200deg, rgba(255,240,150,0.25) 210deg, transparent 220deg,
+        transparent 250deg, rgba(255,240,150,0.3) 260deg, transparent 270deg,
+        transparent 290deg, rgba(255,240,150,0.25) 300deg, transparent 310deg,
+        transparent 340deg, rgba(255,240,150,0.3) 350deg, transparent 360deg);
+    border-radius: 50%;
+    opacity: 0;
+    animation: goodRays 10s ease-out forwards, goodRaysSpin 20s linear infinite;
+  }
+  @keyframes goodRays {
+    0%, 20% { opacity: 0; }
+    100% { opacity: 0.7; }
+  }
+  @keyframes goodRaysSpin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+  #goodWaves {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 40%;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(180,230,255,0.4) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 30%, rgba(180,230,255,0.3) 0%, transparent 40%);
+    animation: wavesMove 4s ease-in-out infinite alternate;
+  }
+  @keyframes wavesMove {
+    0% { transform: translateX(-10px); }
+    100% { transform: translateX(10px); }
+  }
+  #goodSub {
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    font-size: 60px;
+    animation: subRise 12s ease-out 2s forwards;
+    opacity: 0;
+  }
+  @keyframes subRise {
+    0% { transform: translateX(-50%) translateY(100%); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-20vh); opacity: 1; }
+  }
+  #goodText {
+    position: absolute;
+    top: 55%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 0 20px #4ac0ff, 0 0 40px #4ac0ff;
+    opacity: 0;
+    animation: textAppear 3s ease-out 9s forwards;
+    z-index: 10;
+    padding: 0 20px;
+  }
+  @keyframes textAppear {
+    from { opacity: 0; transform: translate(-50%, -40%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
+  }
+  #goodText h1 {
+    font-size: 32px;
+    letter-spacing: 8px;
+    margin-bottom: 16px;
+    color: #8fffc8;
+  }
+  #goodText p {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #a8e6cf;
+    max-width: 520px;
+  }
+
+  /* --- КОНЦОВКА 2: ПЛОХАЯ (поедание) --- */
+  #endingBad {
+    background: #000;
+  }
+  #badEye {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      #ff3030 0%,
+      #aa0000 30%,
+      #400000 60%,
+      #000 100%);
+    box-shadow: 0 0 80px #ff0000, inset 0 0 40px #000;
+    opacity: 0;
+    animation: badEyeOpen 3s ease-out forwards;
+  }
+  @keyframes badEyeOpen {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  }
+  #badPupil {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px; height: 100px;
+    background: #000;
+    border-radius: 50%;
+    box-shadow: inset 0 0 20px #500;
+    animation: pupilShrink 5s ease-in forwards;
+  }
+  @keyframes pupilShrink {
+    0% { width: 40px; height: 100px; }
+    100% { width: 10px; height: 60px; }
+  }
+  #badMouth {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #800 0%, #000 80%);
+    box-shadow: inset 0 0 50px #500;
+    opacity: 0;
+    animation: badMouthOpen 8s ease-in 1s forwards;
+  }
+  @keyframes badMouthOpen {
+    0% { opacity: 0; width: 40px; height: 40px; }
+    10% { opacity: 1; }
+    100% { opacity: 1; width: 300vmax; height: 300vmax; }
+  }
+  #badTeethRing {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background-image:
+      repeating-conic-gradient(from 0deg, #e0d0d0 0deg 3deg, transparent 3deg 8deg);
+    opacity: 0;
+    animation: badTeeth 8s ease-in 1s forwards;
+  }
+  @keyframes badTeeth {
+    0% { opacity: 0; width: 100px; height: 100px; }
+    15% { opacity: 0.9; }
+    100% { opacity: 1; width: 250vmax; height: 250vmax; }
+  }
+  #badText {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 0 20px #ff0000, 0 0 40px #800000;
+    opacity: 0;
+    animation: badTextAppear 6s ease-in 6s forwards;
+    z-index: 10;
+    padding: 0 20px;
+  }
+  @keyframes badTextAppear {
+    0%, 60% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  #badText h1 {
+    font-size: 38px;
+    letter-spacing: 10px;
+    margin-bottom: 16px;
+    color: #ff3030;
+  }
+  #badText p {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #a05050;
+    max-width: 520px;
+  }
+  /* Тени щупалец по краям */
+  .badTentacle {
+    position: absolute;
+    background: linear-gradient(180deg, transparent 0%, #000 100%);
+    opacity: 0;
+    animation: tentacleSlide 6s ease-out 1s forwards;
+  }
+  @keyframes tentacleSlide {
+    0% { opacity: 0; transform: translateY(-100%); }
+    50% { opacity: 1; }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- КОНЦОВКА 3: СЕКРЕТНАЯ (сон) --- */
+  #endingSecret {
+    background: #000;
+  }
+  /* Фаза 1: подъём (как хорошая, но быстрее) */
+  #secretSky {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg,
+      #0a2a4a 0%,
+      #1a4a6a 30%,
+      #2a6a8a 60%,
+      #4a9ac0 100%);
+    opacity: 0;
+    animation: secretSkyFade 4s ease-in forwards;
+  }
+  @keyframes secretSkyFade {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  #secretSun {
+    position: absolute;
+    top: 25%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, #fff8b0 0%, #ffdd55 40%, rgba(255,200,80,0) 80%);
+    border-radius: 50%;
+    box-shadow: 0 0 100px #ffdd55, 0 0 200px rgba(255,200,80,0.6);
+    opacity: 0;
+    animation: secretSunRise 4s ease-out forwards;
+  }
+  @keyframes secretSunRise {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  /* Фаза 2: пробуждение */
+  #secretRoom {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #2a2520 0%, #1a1510 100%);
+    opacity: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: secretRoomAppear 3s ease-in 5s forwards;
+  }
+  @keyframes secretRoomAppear {
+    0% { opacity: 0; transform: scale(1.2); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  /* Окно в комнате */
+  #secretWindow {
+    position: absolute;
+    top: 15%; right: 15%;
+    width: 180px; height: 180px;
+    background: linear-gradient(180deg, #4a7ab0 0%, #7ab0e0 100%);
+    border: 6px solid #1a1510;
+    box-shadow: 0 0 20px rgba(100,150,220,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  #secretWindow::before {
+    content: '';
+    position: absolute;
+    width: 100%; height: 6px;
+    background: #1a1510;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  #secretWindow::after {
+    content: '';
+    position: absolute;
+    width: 6px; height: 100%;
+    background: #1a1510;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  /* Кровать */
+  #secretBed {
+    position: absolute;
+    bottom: 20%;
+    left: 10%;
+    width: 55%;
+    height: 22%;
+    background: linear-gradient(180deg, #3a2a1a 0%, #2a1a10 100%);
+    border-radius: 8px;
+    box-shadow: inset 0 0 30px #000;
+  }
+  #secretBedPillow {
+    position: absolute;
+    top: 12%; right: 8%;
+    width: 18%; height: 70%;
+    background: linear-gradient(180deg, #d8c8a8 0%, #a89878 100%);
+    border-radius: 40% 40% 20% 20%;
+  }
+  /* ГГ садится */
+  #secretPerson {
+    position: absolute;
+    bottom: 40%; right: 20%;
+    width: 60px; height: 100px;
+    background: #c0a080;
+    border-radius: 30px 30px 20px 20px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    opacity: 0;
+    animation: personSit 2s ease-out 6s forwards;
+  }
+  @keyframes personSit {
+    0% { opacity: 0; transform: translateY(60px) scale(0.7); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #secretPerson::before {
+    content: '';
+    position: absolute;
+    top: -30px; left: 50%;
+    transform: translateX(-50%);
+    width: 50px; height: 50px;
+    background: #d8b890;
+    border-radius: 50%;
+    box-shadow: inset -5px -5px 10px rgba(0,0,0,0.3);
+  }
+  /* Постель на человеке */
+  #secretBlanket {
+    position: absolute;
+    bottom: 30%;
+    left: 15%;
+    width: 45%;
+    height: 12%;
+    background: linear-gradient(180deg, #5a4a3a 0%, #3a2a1a 100%);
+    border-radius: 20px;
+    opacity: 0;
+    animation: blanketOn 1.5s ease-out 7s forwards;
+  }
+  @keyframes blanketOn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  /* Секретный текст */
+  #secretText {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #fff;
+    opacity: 0;
+    animation: secretTextAppear 4s ease-in 9s forwards;
+    z-index: 20;
+    padding: 20px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 8px;
+    max-width: 90vw;
+  }
+  @keyframes secretTextAppear {
+    0% { opacity: 0; transform: translate(-50%, -40%); }
+    100% { opacity: 1; transform: translate(-50%, -50%); }
+  }
+  #secretText h1 {
+    font-size: 30px;
+    letter-spacing: 8px;
+    margin-bottom: 16px;
+    color: #ffd166;
+    text-shadow: 0 0 20px #ffd166;
+  }
+  #secretText p {
+    font-size: 14px;
+    line-height: 1.8;
+    color: #e0d0b0;
+    max-width: 520px;
+  }
+  /* Вспышка при пробуждении */
+  #secretFlash {
+    position: absolute; inset: 0;
+    background: #fff;
+    opacity: 0;
+    z-index: 100;
+    pointer-events: none;
+    animation: secretFlashAnim 1s ease-out 5s;
+  }
+  @keyframes secretFlashAnim {
+    0% { opacity: 0; }
+    20% { opacity: 0.9; }
+    100% { opacity: 0; }
+  }
+
+  /* Кнопка "Ещё раз" общая для концовок */
+  .endingRestart {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    padding: 14px 36px;
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 2px;
+    background: rgba(0,0,0,0.7);
+    border: 2px solid currentColor;
+    color: inherit;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    animation: textAppear 1.5s ease-out 12s forwards;
+    min-height: 50px;
+    touch-action: manipulation;
+  }
+  .endingRestart:active {
+    transform: translateX(-50%) scale(0.96);
+    background: currentColor;
+    color: #000;
+  }
+  @media (hover:hover) {
+    .endingRestart:hover {
+      background: currentColor;
+      color: #000;
+    }
+  }
+
+  @media (max-width: 600px) {
+    #cabinWindow { width: 88%; height: 55%; }
+    #taskPanel { max-height: 52vh; bottom: 100px; }
+    #flashBtn { width: 80px; height: 80px; bottom: 95px; }
+    .nav-btn { padding: 10px 12px; min-width: 72px; }
+    #timerValue { font-size: 20px; }
+    h2 { font-size: 13px; }
+    .code-display { font-size: 20px; letter-spacing: 6px; }
+    #sonar { width: 100px; height: 100px; }
+    #sonarBlip { width: 8px; height: 8px; }
+    .map-room { font-size: 8px; padding: 2px 6px;}
+    #eventBanner { font-size: 20px; padding: 14px 24px; letter-spacing: 4px; }
+    #goodText h1, #badText h1, #secretText h1 { font-size: 22px; letter-spacing: 5px; }
+    #goodText p, #badText p, #secretText p { font-size: 12px; }
+    #secretWindow { width: 120px; height: 120px; }
+  }
+  @media (max-height: 500px) {
+    #cabinWindow { height: 70%; }
+    #taskPanel { max-height: 55vh; }
+  }
+</style>
+</head>
+<body>
+<div id="game">
+
+  <div id="cabinWindow">
+    <div id="oceanView"></div>
+    <div id="interior"></div>
+
+    <div id="creature">
+      <svg id="creatureSvg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="200" cy="280" rx="180" ry="140" fill="#040c10" opacity="0.95"/>
+        <path d="M40 300 Q 10 350 30 400 Q 50 380 60 340 Z" fill="#030a0e"/>
+        <path d="M360 300 Q 390 350 370 400 Q 350 380 340 340 Z" fill="#030a0e"/>
+        <path d="M100 380 Q 90 420 110 440 Q 130 420 130 380 Z" fill="#030a0e"/>
+        <path d="M300 380 Q 310 420 290 440 Q 270 420 270 380 Z" fill="#030a0e"/>
+        <path d="M200 400 Q 190 450 210 470 Q 230 450 220 400 Z" fill="#030a0e"/>
+        <path d="M20 220 Q -20 200 0 170 Q 30 190 40 220 Z" fill="#030a0e"/>
+        <path d="M380 220 Q 420 200 400 170 Q 370 190 360 220 Z" fill="#030a0e"/>
+        <ellipse class="eye" cx="140" cy="240" rx="14" ry="10"/>
+        <ellipse class="eye" cx="260" cy="240" rx="14" ry="10"/>
+        <ellipse cx="140" cy="240" rx="4" ry="9" fill="#000"/>
+        <ellipse cx="260" cy="240" rx="4" ry="9" fill="#000"/>
+        <path d="M120 320 Q 200 370 280 320 Q 200 350 120 320 Z" fill="#1a0000"/>
+        <path d="M140 328 L 150 345 L 160 330 L 170 350 L 180 332 L 190 352 L 200 334 L 210 352 L 220 332 L 230 350 L 240 330 L 250 345 L 260 328" fill="#500" opacity="0.7"/>
+      </svg>
+    </div>
+  </div>
+
+  <div id="spotlight"></div>
+
+  <div id="flood">
+    <div id="floodWater"></div>
+  </div>
+  <div id="leaks"></div>
+
+  <div id="fire">
+    <div id="fireGlow"></div>
+  </div>
+  <div id="smoke"></div>
+
+  <div id="alertOverlay"></div>
+
+  <div id="steam"></div>
+  <div id="vignette"></div>
+  <div id="noise"></div>
+
+  <div id="map"></div>
+
+  <div id="sonar">
+    <div id="sonarSweep"></div>
+    <div id="sonarCenter"></div>
+    <div id="sonarBlip"></div>
+    <div id="sonarLabel">ЭХОЛОКАТОР</div>
+  </div>
+
+  <div id="hud">
+    <div class="col" style="margin-left: 130px;">
+      <span>⚡ ЭНЕРГИЯ</span>
+      <div class="bar"><div class="bar-fill" id="energyFill" style="width:100%"></div></div>
+      <span style="margin-top:2px">🔧 ПОЧИНКА</span>
+      <div class="bar"><div class="bar-fill" id="repairFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div id="timerWrap">
+    <div>КИСЛОРОД</div>
+    <div id="timerValue">03:30</div>
+  </div>
+
+  <div id="taskPanel">
+    <div id="taskContent"></div>
+  </div>
+
+  <button id="flashBtn">
+    <span class="icon">🔦</span>
+    <span class="label">СВЕТ</span>
+  </button>
+
+  <div id="log"></div>
+
+  <div id="navBar">
+    <button class="nav-btn" id="navLeft" disabled>
+      <span class="icon">◀</span>
+      <span>НАЗАД</span>
+    </button>
+    <button class="nav-btn" id="navAction">
+      <span class="icon">⚙</span>
+      <span>РЕМОНТ</span>
+    </button>
+    <button class="nav-btn" id="navRight">
+      <span class="icon">▶</span>
+      <span>ВПЕРЁД</span>
+    </button>
+  </div>
+
+  <div id="eventBanner"></div>
+
+  <!-- ============ ЭКРАН ПОЕДАНИЯ (короткий) ============ -->
+  <div id="eatScene">
+    <div id="eatMouth">
+      <div id="eatTeeth"></div>
+    </div>
+    <div id="eatText">БЕЗДНА ПОГЛОТИЛА ТЕБЯ</div>
+  </div>
+
+  <!-- ============ КОНЦОВКА 1: ХОРОШАЯ ============ -->
+  <div class="ending" id="endingGood">
+    <div id="goodSky"></div>
+    <div id="goodWaves"></div>
+    <div id="goodSun"></div>
+    <div id="goodRays"></div>
+    <div id="goodSub">🚢</div>
+    <div id="goodText">
+      <h1>ТЫ ВЫБРАЛСЯ</h1>
+      <p>Батискаф медленно поднимается к поверхности.<br>
+      Давление падает. Свет становится ярче.<br>
+      Ты слышишь, как ОНО бьётся о корпус где-то внизу — но ты уже слишком высоко.<br><br>
+      Кислорода хватило. Системы работают.<br>
+      Всплытие прошло успешно.</p>
+    </div>
+    <button class="endingRestart" onclick="location.reload()">ИГРАТЬ СНОВА</button>
+  </div>
+
+  <!-- ============ КОНЦОВКА 2: ПЛОХАЯ ============ -->
+  <div class="ending" id="endingBad">
+    <div class="badTentacle" style="top:0; left:0; width:25%; height:60%; transform-origin: top left;"></div>
+    <div class="badTentacle" style="top:0; right:0; width:25%; height:60%; transform-origin: top right;"></div>
+    <div class="badTentacle" style="bottom:0; left:0; width:35%; height:40%; background:linear-gradient(0deg, #000 0%, transparent 100%);"></div>
+    <div class="badTentacle" style="bottom:0; right:0; width:35%; height:40%; background:linear-gradient(0deg, #000 0%, transparent 100%);"></div>
+
+    <div id="badMouth"></div>
+    <div id="badTeethRing"></div>
+    <div id="badEye">
+      <div id="badPupil"></div>
+    </div>
+
+    <div id="badText">
+      <h1>ПОГЛОЩЁН</h1>
+      <p>Оно оказалось быстрее.<br>
+      Пасть сомкнулась вокруг батискафа.<br>
+      Металл смялся, как бумага. Стекло лопнуло.<br>
+      Холодная тьма бездны поглотила тебя целиком.<br><br>
+      Никто и никогда не узнает, что здесь произошло.</p>
+    </div>
+    <button class="endingRestart" onclick="location.reload()">ПОПРОБОВАТЬ СНОВА</button>
+  </div>
+
+  <!-- ============ КОНЦОВКА 3: СЕКРЕТНАЯ ============ -->
+  <div class="ending" id="endingSecret">
+    <!-- Фаза 1: подъём -->
+    <div id="secretSky"></div>
+    <div id="secretSun"></div>
+    <!-- Вспышка -->
+    <div id="secretFlash"></div>
+    <!-- Фаза 2: комната -->
+    <div id="secretRoom">
+      <div id="secretWindow"></div>
+      <div id="secretBed">
+        <div id="secretBedPillow"></div>
+      </div>
+      <div id="secretPerson"></div>
+      <div id="secretBlanket"></div>
+    </div>
+    <div id="secretText">
+      <h1>...ЭТО БЫЛ СОН</h1>
+      <p>Ты резко открываешь глаза.<br>
+      Потолок. Свет из окна. Утро.<br>
+      Ты дома. В своей постели.<br><br>
+      Всё это было просто сном.<br>
+      Очень реалистичным, но сном.<br><br>
+      Только вот на столе лежит странный предмет —<br>
+      осколок стекла от иллюминатора, которого здесь быть не должно.</p>
+    </div>
+    <button class="endingRestart" onclick="location.reload()">ПРОСНУТЬСЯ СНОВА</button>
+  </div>
+
+  <div id="death">
+    <h1>ПОГЛОЩЁН</h1>
+    <p id="deathMsg">Бездна забрала тебя...</p>
+    <button onclick="location.reload()">ПОПРОБОВАТЬ СНОВА</button>
+  </div>
+
+  <div id="win">
+    <h1>ТЫ ВЫБРАЛСЯ</h1>
+    <p id="winMsg">Батискаф медленно поднимается к поверхности...</p>
+    <button onclick="location.reload()">ИГРАТЬ СНОВА</button>
+  </div>
+
+  <div id="controls">
+    <h2>УПРАВЛЕНИЕ</h2>
+    <div class="row"><span>Перемещение между отсеками</span><span class="key">◀ / ▶ или A / D</span></div>
+    <div class="row"><span>Взаимодействие с объектом</span><span class="key">ПРОБЕЛ или E</span></div>
+    <div class="row"><span>Прожектор (отпугнуть существо)</span><span class="key">F или 🔦</span></div>
+    <div class="row"><span>Быстрые ответы в головоломках</span><span class="key">1–6</span></div>
+    <div class="row" style="border:none; margin-top:10px; font-size:11px; opacity:0.6; justify-content:center; text-align:center;">
+      🎧 Наушники + темнота = правильная атмосфера
+    </div>
+    <div style="text-align:center; margin-top:14px;">
+      <button onclick="document.getElementById('controls').classList.remove('show')">ПОНЯЛ</button>
+    </div>
+  </div>
+
+  <div id="intro">
+    <h1>БЕЗДНА</h1>
+    <p>Глубина <b>8 000 метров</b>. Давление 800 атмосфер. Корпус стонет под тяжестью воды.</p>
+    <p>Пять систем вышли из строя. Ты должен двигаться по отсекам батискафа и восстановить их все.</p>
+    <p class="warn">У тебя 3 минуты 30 секунд кислорода.</p>
+    <p>Случится <b style="color:#4ebaff">ЗАТОПЛЕНИЕ</b> (−1:00) или <b style="color:#ff8800">ПОЖАР</b> (−1:30) — но только одно из двух. Или ни одного.</p>
+    <p class="warn">Следи за эхолокатором. Если красная точка доплывёт до центра — конец.</p>
+    <p class="secret">🌅 Найди секретную концовку: пройди игру без единой ошибки и без катастроф.</p>
+    <button id="startBtn">НАЧАТЬ ПОГРУЖЕНИЕ</button>
+    <button id="ctrlBtn" style="border-color:#ffe066; color:#ffe066; margin-top:8px;">УПРАВЛЕНИЕ</button>
+  </div>
+
+</div>
+
+<script>
+/* ============ АУДИО ============ */
+let actx = null;
+let ambientDrone = null;
+let fireSound = null;
+let floodSound = null;
+
+function initAudio() {
+  if (!actx) {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (actx && actx.state === 'suspended') actx.resume();
+}
+function playTone(freq, dur, type='sine', vol=0.15, slideTo=null) {
+  if (!actx) return;
+  try {
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, actx.currentTime);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, actx.currentTime + dur);
+    g.gain.setValueAtTime(vol, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(); o.stop(actx.currentTime + dur);
+  } catch(e) {}
+}
+function playNoise(dur, vol=0.1, freq=800) {
+  if (!actx) return;
+  try {
+    const buf = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = actx.createBufferSource(); src.buffer = buf;
+    const g = actx.createGain();
+    g.gain.setValueAtTime(vol, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+    const f = actx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = freq;
+    src.connect(f); f.connect(g); g.connect(actx.destination);
+    src.start(); src.stop(actx.currentTime + dur);
+  } catch(e) {}
+}
+const sfx = {
+  click: () => playTone(600, 0.06, 'square', 0.1),
+  error: () => playTone(150, 0.3, 'sawtooth', 0.2, 80),
+  correct: () => {
+    playTone(523, 0.15, 'sine', 0.15);
+    setTimeout(() => playTone(659, 0.15, 'sine', 0.15), 120);
+    setTimeout(() => playTone(784, 0.25, 'sine', 0.15), 240);
+  },
+  roar: () => {
+    playTone(45, 2.5, 'sawtooth', 0.4, 20);
+    playTone(70, 2.2, 'sine', 0.25, 30);
+    playNoise(2, 0.2, 300);
+  },
+  whisper: () => playNoise(0.9, 0.08, 1500),
+  heartbeat: () => {
+    playTone(50, 0.12, 'sine', 0.25);
+    setTimeout(() => playTone(45, 0.12, 'sine', 0.2), 160);
+  },
+  heartbeatFast: () => {
+    playTone(55, 0.1, 'sine', 0.32);
+    setTimeout(() => playTone(50, 0.1, 'sine', 0.27), 120);
+    setTimeout(() => playTone(48, 0.1, 'sine', 0.24), 240);
+  },
+  flee: () => {
+    playTone(900, 0.6, 'sine', 0.2, 150);
+    playNoise(0.5, 0.1, 2000);
+  },
+  tick: () => playTone(1200, 0.04, 'square', 0.06),
+  metal: () => {
+    playTone(180, 0.5, 'sawtooth', 0.18, 90);
+    playNoise(0.4, 0.15, 2000);
+  },
+  metalCreak: () => {
+    playTone(120, 1.2, 'sawtooth', 0.12, 60);
+    playTone(300, 0.8, 'triangle', 0.08, 150);
+  },
+  waterDrip: () => playTone(1500, 0.08, 'sine', 0.08, 800),
+  step: () => {
+    playTone(80, 0.08, 'square', 0.15);
+    playNoise(0.1, 0.1, 400);
+  },
+  glitch: () => {
+    playNoise(0.15, 0.15, 3000);
+    playTone(80, 0.2, 'sawtooth', 0.12, 40);
+  },
+  eat: () => {
+    playTone(30, 4, 'sawtooth', 0.5, 15);
+    playNoise(4, 0.3, 200);
+    setTimeout(() => playTone(60, 3, 'square', 0.3, 20), 500);
+    setTimeout(() => playNoise(3, 0.25, 100), 1000);
+  },
+  sonarPing: () => playTone(1400, 0.08, 'sine', 0.06, 1600),
+  alert: () => {
+    playTone(880, 0.15, 'square', 0.15);
+    setTimeout(() => playTone(1100, 0.15, 'square', 0.15), 150);
+  },
+  alarmFlood: () => {
+    playTone(400, 0.4, 'square', 0.25);
+    setTimeout(() => playTone(300, 0.4, 'square', 0.25), 400);
+    setTimeout(() => playTone(400, 0.4, 'square', 0.25), 800);
+    setTimeout(() => playTone(300, 0.4, 'square', 0.25), 1200);
+  },
+  alarmFire: () => {
+    playTone(700, 0.25, 'square', 0.28);
+    setTimeout(() => playTone(900, 0.25, 'square', 0.28), 300);
+    setTimeout(() => playTone(700, 0.25, 'square', 0.28), 600);
+    setTimeout(() => playTone(900, 0.25, 'square', 0.28), 900);
+  },
+  waterBurst: () => {
+    playNoise(2.5, 0.25, 3000);
+    playTone(200, 2, 'sawtooth', 0.15, 80);
+  },
+  fireBurst: () => {
+    playNoise(2, 0.28, 1500);
+    playTone(150, 1.5, 'sawtooth', 0.2, 60);
+    playTone(250, 1.2, 'square', 0.15, 100);
+  },
+  // Звуки концовок
+  endingGood: () => {
+    // Мажорный аккорд — облегчение
+    playTone(523, 1.5, 'sine', 0.15);
+    setTimeout(() => playTone(659, 1.5, 'sine', 0.14), 200);
+    setTimeout(() => playTone(784, 1.8, 'sine', 0.13), 400);
+    setTimeout(() => playTone(1046, 2, 'sine', 0.12), 700);
+  },
+  endingBad: () => {
+    // Зловещий низкий гул — поглощение
+    playTone(30, 6, 'sawtooth', 0.35, 15);
+    playTone(45, 5, 'sine', 0.3, 20);
+    playNoise(5, 0.2, 200);
+  },
+  endingSecret: () => {
+    // Смешение: надежда + резкое пробуждение
+    playTone(659, 1.2, 'sine', 0.15);
+    setTimeout(() => playTone(784, 1.2, 'sine', 0.14), 200);
+    setTimeout(() => {
+      // Резкий звук пробуждения
+      playTone(200, 0.6, 'sawtooth', 0.25, 60);
+      playNoise(0.8, 0.2, 2000);
+    }, 4500);
+  },
+  subRise: () => {
+    // Звук подъёма — нарастающий тон
+    playTone(100, 6, 'sine', 0.15, 600);
+  },
+  wakeUp: () => {
+    playTone(1500, 0.3, 'sine', 0.2, 400);
+    playNoise(0.5, 0.15, 3000);
+  },
+};
+
+function startDrone() {
+  if (!actx || ambientDrone) return;
+  try {
+    const o = actx.createOscillator();
+    const o2 = actx.createOscillator();
+    const o3 = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = 32;
+    o2.type = 'sine'; o2.frequency.value = 48;
+    o3.type = 'triangle'; o3.frequency.value = 65;
+    g.gain.value = 0.08;
+    o.connect(g); o2.connect(g); o3.connect(g); g.connect(actx.destination);
+    o.start(); o2.start(); o3.start();
+    ambientDrone = { o, o2, o3, g };
+  } catch(e) {}
+}
+function stopDrone() {
+  if (!ambientDrone) return;
+  try {
+    ambientDrone.g.gain.setTargetAtTime(0, actx.currentTime, 1);
+    setTimeout(() => {
+      try { ambientDrone.o.stop(); ambientDrone.o2.stop(); ambientDrone.o3.stop(); } catch(e){}
+      ambientDrone = null;
+    }, 2000);
+  } catch(e){}
+}
+function updateDrone(intensity) {
+  if (!ambientDrone) return;
+  try {
+    ambientDrone.g.gain.setTargetAtTime(0.05 + intensity * 0.15, actx.currentTime, 0.5);
+    ambientDrone.o.frequency.setTargetAtTime(32 - intensity * 10, actx.currentTime, 1);
+    ambientDrone.o2.frequency.setTargetAtTime(48 - intensity * 15, actx.currentTime, 1);
+    ambientDrone.o3.frequency.setTargetAtTime(65 - intensity * 20, actx.currentTime, 1);
+  } catch(e) {}
+}
+function startFireSound() {
+  if (!actx || fireSound) return;
+  try {
+    const bufSize = actx.sampleRate * 2;
+    const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.4;
+    const src = actx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const f = actx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 400;
+    const g = actx.createGain();
+    g.gain.value = 0.05;
+    src.connect(f); f.connect(g); g.connect(actx.destination);
+    src.start();
+    fireSound = { src, g };
+  } catch(e) {}
+}
+function startFloodSound() {
+  if (!actx || floodSound) return;
+  try {
+    const bufSize = actx.sampleRate * 2;
+    const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
+    const src = actx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    const f = actx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = 800;
+    const g = actx.createGain();
+    g.gain.value = 0.04;
+    src.connect(f); f.connect(g); g.connect(actx.destination);
+    src.start();
+    floodSound = { src, g };
+  } catch(e) {}
+}
+
+/* ============ ОТСЕКИ ============ */
+const ROOMS = [
+  { id: 'repair',  name: '🔧 РЕМОНТ',      type: 'wires'   },
+  { id: 'cabin',   name: '🎛 РУБКА',        type: 'code'    },
+  { id: 'reactor', name: '⚙ РЕАКТОР',      type: 'symbols' },
+  { id: 'engine',  name: '🔥 ДВИГАТЕЛЬ',   type: 'switches'},
+  { id: 'bridge',  name: '📡 КАПИТАНСКАЯ', type: 'math'    },
+];
+const TOTAL_ROOMS = ROOMS.length;
+
+/* ============ СОСТОЯНИЕ ============ */
+const state = {
+  currentRoom: 1,
+  energy: 100,
+  repairProgress: 0,
+  creatureVisible: false,
+  fleeingUntil: 0,
+  gameOver: false,
+  won: false,
+  timeLeft: 210,
+  gameActive: false,
+  lastTickSecond: -1,
+  lastWhisper: 0,
+  lastSonarPing: 0,
+  creatureAngle: 0,
+  creatureDist: 100,
+  creatureSpeed: 1,
+  roomTasks: {
+    0: { done: false },
+    1: { done: false },
+    2: { done: false },
+    3: { done: false },
+    4: { done: false },
+  },
+  creatureRoomX: 50,
+  creatureRoomY: 60,
+  event: null,
+  eventTriggered: false,
+  eventPlannedAt: 0,
+  nextAttackCheck: 0,
+  // Для концовок
+  mistakes: 0,        // количество ошибок за партию
+};
+
+/* ============ ССЫЛКИ ============ */
+const $cabinWindow = document.getElementById('cabinWindow');
+const $oceanView = document.getElementById('oceanView');
+const $interior = document.getElementById('interior');
+const $creature = document.getElementById('creature');
+const $game = document.getElementById('game');
+const $spotlight = document.getElementById('spotlight');
+const $vignette = document.getElementById('vignette');
+const $noise = document.getElementById('noise');
+const $flood = document.getElementById('flood');
+const $floodWater = document.getElementById('floodWater');
+const $leaks = document.getElementById('leaks');
+const $fire = document.getElementById('fire');
+const $alertOverlay = document.getElementById('alertOverlay');
+const $eventBanner = document.getElementById('eventBanner');
+const $log = document.getElementById('log');
+const $flash = document.getElementById('flashBtn');
+const $energyFill = document.getElementById('energyFill');
+const $repairFill = document.getElementById('repairFill');
+const $timerValue = document.getElementById('timerValue');
+const $taskPanel = document.getElementById('taskPanel');
+const $taskContent = document.getElementById('taskContent');
+const $navLeft = document.getElementById('navLeft');
+const $navRight = document.getElementById('navRight');
+const $navAction = document.getElementById('navAction');
+const $map = document.getElementById('map');
+const $sonarBlip = document.getElementById('sonarBlip');
+const $intro = document.getElementById('intro');
+
+/* ============ КАРТА ============ */
+function buildMap() {
+  $map.innerHTML = ROOMS.map((r, i) =>
+    `<div class="map-room" data-room="${i}">${r.name}</div>`
+  ).join('');
+}
+buildMap();
+
+/* ============ ИНТЕРЬЕРЫ ============ */
+const interiors = {
+  repair: () => `
+    <div class="room-piece" style="left:5%; bottom:8%; width:35%; height:22%;"></div>
+    <div class="pipe" style="right:2%; top:8%; width:8px; height:40%;"></div>
+    <div class="pipe" style="right:6%; top:12%; width:6px; height:35%;"></div>
+    <div class="pipe" style="right:10%; top:20%; width:5px; height:30%;"></div>
+    <div class="cable" style="left:20%; top:2%; width:2px; height:15%;"></div>
+    <div class="cable" style="left:22%; top:2%; width:2px; height:20%;"></div>
+    <div class="cable" style="left:55%; top:2%; width:3px; height:12%;"></div>
+    <div class="cable" style="left:60%; top:2%; width:2px; height:18%;"></div>
+    <div class="led on" style="left:15%; bottom:30%;"></div>
+    <div class="led warn" style="left:18%; bottom:30%;"></div>
+    <div class="led err" style="left:21%; bottom:30%;"></div>
+    <div class="room-piece" style="left:8%; bottom:10%; width:8%; height:6%; background:linear-gradient(180deg,#4a2020 0%,#2a1010 100%);"></div>
+  `,
+  cabin: () => `
+    <div class="room-piece" style="left:20%; right:20%; top:4%; height:10%;"></div>
+    <div class="room-piece" style="left:3%; top:20%; width:12%; height:55%;"></div>
+    <div class="room-piece" style="right:3%; top:20%; width:12%; height:55%;"></div>
+    <div class="led on" style="left:7%; top:28%;"></div>
+    <div class="led on" style="left:9%; top:28%;"></div>
+    <div class="led warn" style="left:7%; top:33%;"></div>
+    <div class="led err" style="left:9%; top:38%;"></div>
+    <div class="led on" style="right:7%; top:30%;"></div>
+    <div class="led on" style="right:9%; top:35%;"></div>
+    <div class="cable" style="left:30%; top:0%; width:2px; height:8%;"></div>
+    <div class="cable" style="left:45%; top:0%; width:2px; height:6%;"></div>
+    <div class="cable" style="left:60%; top:0%; width:3px; height:9%;"></div>
+  `,
+  reactor: () => `
+    <div class="room-piece" style="left:44%; top:15%; width:12%; height:70%; background:linear-gradient(180deg,#2a1010 0%,#4a2018 50%,#2a1010 100%); border-color:#5a2a2a;"></div>
+    <div class="pipe" style="left:8%; top:5%; width:10px; height:60%; background:linear-gradient(90deg,#3a1a1a 0%,#6a2a2a 50%,#3a1a1a 100%);"></div>
+    <div class="pipe" style="right:8%; top:5%; width:10px; height:60%; background:linear-gradient(90deg,#3a1a1a 0%,#6a2a2a 50%,#3a1a1a 100%);"></div>
+    <div class="cable" style="left:15%; top:0%; width:2px; height:10%;"></div>
+    <div class="cable" style="right:15%; top:0%; width:2px; height:10%;"></div>
+    <div class="led err" style="left:30%; top:30%;"></div>
+    <div class="led err" style="right:30%; top:30%;"></div>
+    <div class="led warn" style="left:28%; top:40%;"></div>
+    <div class="led warn" style="right:28%; top:40%;"></div>
+    <div class="led on" style="left:32%; top:50%;"></div>
+    <div class="led on" style="right:32%; top:50%;"></div>
+    <div class="room-piece" style="left:20%; bottom:10%; width:8%; height:8%; border-radius:50%; background:radial-gradient(circle,#4a2010 0%,#2a1008 100%);"></div>
+    <div class="room-piece" style="right:20%; bottom:10%; width:8%; height:8%; border-radius:50%; background:radial-gradient(circle,#4a2010 0%,#2a1008 100%);"></div>
+  `,
+  engine: () => `
+    <div class="room-piece" style="left:8%; top:20%; width:22%; height:60%; border-radius:50%; background:radial-gradient(circle,#3a2a10 0%,#1a1008 100%); border-color:#6a4a10;"></div>
+    <div class="room-piece" style="right:8%; top:20%; width:22%; height:60%; border-radius:50%; background:radial-gradient(circle,#3a2a10 0%,#1a1008 100%); border-color:#6a4a10;"></div>
+    <div class="pipe" style="left:30%; top:2%; width:12px; height:12%; background:linear-gradient(90deg,#3a2a10 0%,#8a6a20 50%,#3a2a10 100%);"></div>
+    <div class="pipe" style="right:30%; top:2%; width:12px; height:12%; background:linear-gradient(90deg,#3a2a10 0%,#8a6a20 50%,#3a2a10 100%);"></div>
+    <div class="led warn" style="left:20%; top:85%;"></div>
+    <div class="led warn" style="right:20%; top:85%;"></div>
+    <div class="led err" style="left:50%; top:15%;"></div>
+    <div class="led err" style="right:50%; top:15%;"></div>
+    <div class="cable" style="left:35%; bottom:0%; width:3px; height:8%;"></div>
+    <div class="cable" style="right:35%; bottom:0%; width:3px; height:8%;"></div>
+  `,
+  bridge: () => `
+    <div class="room-piece" style="left:5%; right:5%; bottom:8%; height:18%; background:linear-gradient(180deg,#102a2a 0%,#081515 100%);"></div>
+    <div class="led on" style="left:10%; bottom:22%;"></div>
+    <div class="led on" style="left:13%; bottom:22%;"></div>
+    <div class="led warn" style="left:16%; bottom:22%;"></div>
+    <div class="led on" style="left:19%; bottom:22%;"></div>
+    <div class="led err" style="left:22%; bottom:22%;"></div>
+    <div class="led on" style="left:26%; bottom:22%;"></div>
+    <div class="led on" style="right:26%; bottom:22%;"></div>
+    <div class="led warn" style="right:22%; bottom:22%;"></div>
+    <div class="led err" style="right:19%; bottom:22%;"></div>
+    <div class="led on" style="right:16%; bottom:22%;"></div>
+    <div class="led on" style="right:13%; bottom:22%;"></div>
+    <div class="led on" style="right:10%; bottom:22%;"></div>
+    <div class="cable" style="left:15%; top:0%; width:2px; height:25%;"></div>
+    <div class="cable" style="left:35%; top:0%; width:2px; height:20%;"></div>
+    <div class="cable" style="right:35%; top:0%; width:2px; height:20%;"></div>
+    <div class="cable" style="right:15%; top:0%; width:2px; height:25%;"></div>
+    <div class="room-piece" style="left:10%; top:5%; width:15%; height:20%; background:linear-gradient(180deg,rgba(20,50,60,0.6) 0%,rgba(5,20,25,0.8) 100%);"></div>
+    <div class="room-piece" style="right:10%; top:5%; width:15%; height:20%; background:linear-gradient(180deg,rgba(20,50,60,0.6) 0%,rgba(5,20,25,0.8) 100%);"></div>
+  `,
+};
+const oceanBackgrounds = {
+  repair: 'radial-gradient(ellipse at 50% 70%, #051f28 0%, #010a0e 60%, #000 100%)',
+  cabin:  'radial-gradient(ellipse at 50% 70%, #04212b 0%, #010a0e 60%, #000 100%)',
+  reactor:'radial-gradient(ellipse at 50% 70%, #1a0808 0%, #050202 60%, #000 100%)',
+  engine: 'radial-gradient(ellipse at 50% 70%, #1a1004 0%, #050300 60%, #000 100%)',
+  bridge: 'radial-gradient(ellipse at 50% 70%, #041e1a 0%, #010a08 60%, #000 100%)',
+};
+const windowShadows = {
+  repair: 'inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 150px rgba(100,80,0,0.25), 0 0 60px rgba(100,80,0,0.3)',
+  cabin:  'inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 200px rgba(0,60,80,0.3), 0 0 60px rgba(0,60,80,0.4)',
+  reactor:'inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 150px rgba(120,0,0,0.35), 0 0 60px rgba(120,0,0,0.4)',
+  engine: 'inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 150px rgba(120,100,0,0.3), 0 0 60px rgba(120,100,0,0.35)',
+  bridge: 'inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 150px rgba(0,100,80,0.25), 0 0 60px rgba(0,100,80,0.3)',
+};
+function applyInterior() {
+  const room = ROOMS[state.currentRoom];
+  $oceanView.style.background = oceanBackgrounds[room.id];
+  $cabinWindow.style.boxShadow = windowShadows[room.id];
+  $interior.style.opacity = '0';
+  setTimeout(() => {
+    $interior.innerHTML = interiors[room.id] ? interiors[room.id]() : '';
+    $interior.style.opacity = '1';
+  }, 200);
+}
+
+/* ============ ЧАСТИЦЫ ============ */
+setInterval(() => {
+  if (!state.gameActive) return;
+  const p = document.createElement('div');
+  p.className = 'particle';
+  const size = 1 + Math.random() * 3;
+  p.style.cssText = `
+    width:${size}px;height:${size}px;
+    left:${Math.random() * 100}%;
+    top:${60 + Math.random() * 40}%;
+    animation-duration:${6 + Math.random() * 8}s;
+    opacity:${0.3 + Math.random() * 0.5};
+  `;
+  $oceanView.appendChild(p);
+  setTimeout(() => p.remove(), 15000);
+}, 300);
+
+/* ============ УТИЛИТЫ ============ */
+function shake(hard=false) {
+  $game.classList.remove('shake', 'shake-hard');
+  void $game.offsetWidth;
+  $game.classList.add(hard ? 'shake-hard' : 'shake');
+}
+function log(msg, color='#ff8a8a', dur=3500) {
+  $log.textContent = msg;
+  $log.style.color = color;
+  clearTimeout(log._t);
+  log._t = setTimeout(() => $log.textContent = '', dur);
+}
+function updateHUD() {
+  $energyFill.style.width = state.energy + '%';
+  $repairFill.style.width = (state.repairProgress / TOTAL_ROOMS * 100) + '%';
+}
+function updateMap() {
+  document.querySelectorAll('.map-room').forEach((el, i) => {
+    el.classList.toggle('current', i === state.currentRoom);
+    el.classList.toggle('done', state.roomTasks[i].done);
+  });
+}
+function updateTimer() {
+  const m = Math.floor(Math.max(0, state.timeLeft) / 60);
+  const s = Math.floor(Math.max(0, state.timeLeft) % 60);
+  $timerValue.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  $timerValue.classList.toggle('warn', state.timeLeft <= 30);
+}
+
+/* ============ ЭХОЛОКАТОР ============ */
+function updateSonar() {
+  const rad = state.creatureAngle * Math.PI / 180;
+  const r = (state.creatureDist / 100) * 50;
+  const x = 50 + Math.cos(rad) * r;
+  const y = 50 + Math.sin(rad) * r;
+  $sonarBlip.style.left = x + '%';
+  $sonarBlip.style.top = y + '%';
+  $sonarBlip.style.transform = 'translate(-50%, -50%)';
+  $sonarBlip.style.opacity = state.creatureDist < 80 ? 1 : 0.6;
+  const now = Date.now();
+  const pingInterval = state.creatureDist < 30 ? 400 : 900;
+  if (now - state.lastSonarPing > pingInterval) {
+    state.lastSonarPing = now;
+    sfx.sonarPing();
+  }
+  if (state.creatureVisible) {
+    const nx = 50 + Math.cos(rad) * (state.creatureDist * 0.35);
+    const ny = 60 + Math.sin(rad) * (state.creatureDist * 0.25);
+    state.creatureRoomX = Math.max(10, Math.min(90, nx));
+    state.creatureRoomY = Math.max(20, Math.min(90, ny));
+    $creature.style.left = state.creatureRoomX + '%';
+    $creature.style.top = state.creatureRoomY + '%';
+    const size = 120 + (100 - state.creatureDist) * 5;
+    $creature.style.width = size + 'px';
+    $creature.style.height = size + 'px';
+  }
+}
+
+/* ============ СУЩЕСТВО ============ */
+function spawnCreature() {
+  if (state.creatureVisible || state.gameOver || state.won) return;
+  if (Date.now() < state.fleeingUntil) return;
+  state.creatureVisible = true;
+  state.creatureAngle = Math.random() * 360;
+  state.creatureDist = 95;
+  $creature.classList.add('visible');
+  $creature.classList.remove('fleeing');
+  sfx.roar();
+  shake(true);
+  sfx.alert();
+  log('⚠️ ОНО ПРИБЛИЖАЕТСЯ. СЛЕДИ ЗА ЭХОЛОКАТОРОМ!', '#ff2b2b', 5000);
+}
+function fleeCreature() {
+  if (!state.creatureVisible) return;
+  sfx.flee();
+  state.fleeingUntil = Date.now() + 10000;
+  state.creatureDist = 100;
+  $creature.classList.add('fleeing');
+  state.creatureAngle = (state.creatureAngle + 180) % 360;
+  log('🔦 Луч света отогнал ЕГО. На время...', '#ffe066');
+  setTimeout(() => {
+    state.creatureVisible = false;
+    $creature.classList.remove('visible', 'fleeing', 'attacking');
+  }, 1500);
+}
+function creatureAttack() {
+  if (state.gameOver || state.won) return;
+  state.gameOver = true;
+  state.gameActive = false;
+  $creature.classList.add('attacking');
+  sfx.eat();
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 600]);
+  // Сначала короткая анимация поедания
+  setTimeout(() => {
+    document.getElementById('eatScene').classList.add('show');
+    // Через 2 секунды — сразу концовка "плохая"
+    setTimeout(() => {
+      document.getElementById('eatScene').classList.remove('show');
+      stopDrone();
+      showEnding('bad');
+    }, 2500);
+  }, 500);
+}
+
+/* ============ ПРОЖЕКТОР ============ */
+function useFlash() {
+  initAudio();
+  if (state.gameOver || state.won || !state.gameActive) return;
+  if (state.energy < 30) {
+    sfx.error();
+    log('⚡ Недостаточно энергии', '#ffd166');
+    return;
+  }
+  state.energy -= 30;
+  updateHUD();
+  sfx.click();
+  $spotlight.classList.add('on');
+  setTimeout(() => $spotlight.classList.remove('on'), 900);
+  if (state.creatureVisible && Date.now() > state.fleeingUntil) {
+    fleeCreature();
+  } else {
+    log('🔦 Луч прорезал тьму... пусто', '#8fffc8');
+  }
+  if (navigator.vibrate) navigator.vibrate(80);
+}
+$flash.addEventListener('click', useFlash);
+
+/* ============ ПЕРЕМЕЩЕНИЕ ============ */
+function canMove(dir) {
+  const r = state.currentRoom + dir;
+  return r >= 0 && r < TOTAL_ROOMS;
+}
+function moveTo(dir) {
+  if (state.gameOver || state.won || !state.gameActive) return;
+  if (!canMove(dir)) return;
+  state.currentRoom += dir;
+  sfx.step();
+  $cabinWindow.style.transition = 'transform 0.3s, opacity 0.3s';
+  $cabinWindow.style.transform = `translate(-50%, -50%) translateX(${-dir * 40}px)`;
+  $cabinWindow.style.opacity = '0.3';
+  setTimeout(() => {
+    $cabinWindow.style.transform = 'translate(-50%, -50%)';
+    $cabinWindow.style.opacity = '1';
+    applyInterior();
+    $taskPanel.classList.remove('show');
+    updateMap();
+    updateNav();
+  }, 250);
+}
+function updateNav() {
+  $navLeft.disabled = !canMove(-1);
+  $navRight.disabled = !canMove(1);
+  const task = state.roomTasks[state.currentRoom];
+  if (task.done) {
+    $navAction.querySelector('.icon').textContent = '✔';
+    $navAction.querySelector('span:last-child').textContent = 'ГОТОВО';
+  } else {
+    $navAction.querySelector('.icon').textContent = '⚙';
+    $navAction.querySelector('span:last-child').textContent = 'РЕМОНТ';
+  }
+}
+
+/* ============ ГОЛОВОЛОМКИ ============ */
+function interact() {
+  if (state.gameOver || state.won || !state.gameActive) return;
+  const task = state.roomTasks[state.currentRoom];
+  if (task.done) {
+    log('✔ Эта система уже восстановлена', '#8fffc8');
+    return;
+  }
+  const room = ROOMS[state.currentRoom];
+  openPuzzle(room.type);
+  sfx.metalCreak();
+}
+function openPuzzle(type) {
+  $taskPanel.classList.add('show');
+  if (type === 'code') puzzleCode();
+  else if (type === 'symbols') puzzleSymbols();
+  else if (type === 'wires') puzzleWires();
+  else if (type === 'switches') puzzleSwitches();
+  else if (type === 'math') puzzleMath();
+}
+
+let codeAnswer = 0;
+let codeLength = 4;
+function puzzleCode() {
+  codeLength = 3 + Math.floor(Math.random() * 3);
+  const min = Math.pow(10, codeLength - 1);
+  const max = Math.pow(10, codeLength) - 1;
+  codeAnswer = Math.floor(min + Math.random() * (max - min));
+  $taskContent.innerHTML = `
+    <h2>🎛 РУБКА: КОД ДОСТУПА</h2>
+    <p>Основной пульт заблокирован. Код мигает на дисплее...</p>
+    <div class="code-display" id="codeDisplay">${codeAnswer}</div>
+    <p style="font-size:11px; opacity:0.6;">Введи код из ${codeLength} цифр, пока помехи не скрыли его</p>
+    <div class="input-row">
+      <input type="tel" inputmode="numeric" pattern="[0-9]*" id="codeInput" maxlength="${codeLength}" placeholder="${'0'.repeat(codeLength)}" autocomplete="off">
+      <button id="codeSubmit">ВВЕСТИ</button>
+    </div>
+  `;
+  setTimeout(() => {
+    const el = document.getElementById('codeDisplay');
+    if (el) el.textContent = '?'.repeat(codeLength);
+  }, 2500);
+  const flick = setInterval(() => {
+    const el = document.getElementById('codeDisplay');
+    if (!el) { clearInterval(flick); return; }
+    el.style.opacity = Math.random() > 0.3 ? '1' : '0.3';
+  }, 200);
+  const inp = document.getElementById('codeInput');
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitCode(); });
+  document.getElementById('codeSubmit').addEventListener('click', submitCode);
+  if (window.innerWidth > 700) setTimeout(() => inp.focus(), 150);
+}
+function submitCode() {
+  if (state.gameOver || state.won) return;
+  const inp = document.getElementById('codeInput');
+  if (!inp) return;
+  const v = inp.value.trim();
+  if (v === String(codeAnswer)) {
+    sfx.correct();
+    log('✔ Код принят. Рубка активна.', '#8fffc8');
+    solvedRoom(state.currentRoom);
+  } else {
+    state.mistakes++;
+    sfx.error(); shake();
+    log('✘ Неверный код. Помехи усиливаются...', '#ff5e5e');
+    state.timeLeft -= 4;
+    punishCreature(3);
+    inp.value = '';
+  }
+}
+
+let symSequence = [];
+let symProgress = 0;
+function puzzleSymbols() {
+  const symbols = ['◈', '✧', '❖', '▲', '●', '✦', '✜', '❂'];
+  const seqLen = 3 + Math.floor(Math.random() * 3);
+  symSequence = [];
+  for (let i = 0; i < seqLen; i++) symSequence.push(symbols[Math.floor(Math.random() * symbols.length)]);
+  symProgress = 0;
+  const uniq = [...new Set(symSequence)];
+  const extras = symbols.filter(s => !uniq.includes(s));
+  while (uniq.length < 6 && extras.length) uniq.push(extras.shift());
+  uniq.sort(() => Math.random() - 0.5);
+  $taskContent.innerHTML = `
+    <h2>⚙ РЕАКТОР: РИТУАЛ СИМВОЛОВ</h2>
+    <p>Символы на панели реактора. Запомни последовательность из ${seqLen} знаков...</p>
+    <div class="code-display" id="symDisplay">${symSequence.join(' ')}</div>
+    <p style="font-size:11px; opacity:0.6;">Нажимай символы по порядку (или клавиши 1–6)</p>
+    <div class="symbols" id="symChoices">
+      ${uniq.map((s, i) => `<div class="sym" data-s="${s}">${s}<small>${i+1}</small></div>`).join('')}
+    </div>
+  `;
+  setTimeout(() => {
+    const display = document.getElementById('symDisplay');
+    if (display) display.textContent = '? '.repeat(seqLen).trim();
+  }, 3000);
+  document.getElementById('symChoices').querySelectorAll('.sym').forEach(el => {
+    el.addEventListener('click', () => handleSymbol(el.dataset.s));
+  });
+}
+function handleSymbol(s) {
+  if (state.gameOver || state.won) return;
+  if (s === symSequence[symProgress]) {
+    sfx.click();
+    symProgress++;
+    if (symProgress >= symSequence.length) {
+      sfx.correct();
+      log('✔ Символы совпали. Реактор запущен!', '#8fffc8');
+      solvedRoom(state.currentRoom);
+    } else {
+      log(`Символ ${symProgress}/${symSequence.length} принят`, '#8fffc8');
+    }
+  } else {
+    state.mistakes++;
+    sfx.error(); shake();
+    symProgress = 0;
+    state.timeLeft -= 5;
+    punishCreature(4);
+    log('✘ Ошибка. Ты слышишь скрежет за корпусом...', '#ff5e5e');
+  }
+}
+
+let correctWire = 0;
+let wireCount = 3;
+function puzzleWires() {
+  wireCount = 3 + Math.floor(Math.random() * 2);
+  correctWire = Math.floor(Math.random() * wireCount);
+  const palettes = [
+    ['#ff3b3b', '#3bff8b', '#3b8bff', '#ffcc00'],
+    ['#ff0080', '#00ff80', '#8000ff', '#ff8000'],
+    ['#ff0000', '#00ff00', '#0000ff', '#ffff00'],
+    ['#ff5555', '#55ff55', '#5555ff', '#ffff55'],
+  ];
+  const colors = palettes[Math.floor(Math.random() * palettes.length)].slice(0, wireCount);
+  const colorNames = {
+    '#ff3b3b': 'крови', '#3bff8b': 'морской волны', '#3b8bff': 'льда', '#ffcc00': 'золота',
+    '#ff0080': 'розы', '#00ff80': 'изумруда', '#8000ff': 'фиалки', '#ff8000': 'апельсина',
+    '#ff0000': 'крови', '#00ff00': 'травы', '#0000ff': 'моря', '#ffff00': 'золота',
+    '#ff5555': 'заката', '#55ff55': 'листвы', '#5555ff': 'сумерек', '#ffff55': 'солнца',
+  };
+  const correctColorName = colorNames[colors[correctWire]] || 'загадочный';
+  $taskContent.innerHTML = `
+    <h2>🔧 РЕМОНТ: ПРОВОДА</h2>
+    <p>Найди провод ${correctColorName} — он цвета ${correctColorName} (клавиша ${correctWire + 1})</p>
+    <p style="font-size:11px; opacity:0.6;">Ошибка приведёт к короткому замыканию</p>
+    <div class="wires" id="wireBox">
+      ${colors.map((c, i) => `<div class="wire" data-i="${i}" style="background:${c}; color:${c};"></div>`).join('')}
+    </div>
+  `;
+  document.getElementById('wireBox').querySelectorAll('.wire').forEach(w => {
+    w.addEventListener('click', () => handleWire(Number(w.dataset.i)));
+  });
+}
+function handleWire(i) {
+  if (state.gameOver || state.won) return;
+  if (i === correctWire) {
+    sfx.correct();
+    log('✔ Провод верный. Двигатель оживает!', '#8fffc8');
+    solvedRoom(state.currentRoom);
+  } else {
+    state.mistakes++;
+    sfx.error(); shake(true);
+    state.timeLeft -= 8;
+    punishCreature(6);
+    log('✘ Короткое замыкание! Вспышка привлекла ЕГО...', '#ff5e5e');
+  }
+}
+
+let switches = [];
+function puzzleSwitches() {
+  switches = [];
+  for (let i = 0; i < 6; i++) switches.push(Math.random() < 0.5);
+  state._switchesAnswer = switches.slice();
+  $taskContent.innerHTML = `
+    <h2>🔥 ДВИГАТЕЛЬ: ТУМБЛЕРЫ</h2>
+    <p>Запомни правильный паттерн...</p>
+    <div class="code-display" id="swDisplay" style="letter-spacing:6px;">${switches.map(s => s ? '▲' : '▼').join(' ')}</div>
+    <p style="font-size:11px; opacity:0.6;">Нажимай тумблеры (или клавиши 1–6), чтобы переключить</p>
+    <div class="switches-row" id="swBox">
+      ${switches.map((s, i) => `<button class="switch ${s?'up':''}" data-i="${i}">${s?'▲':'▼'}<small>${i+1}</small></button>`).join('')}
+    </div>
+    <div style="text-align:center; margin-top:8px;">
+      <button id="swConfirm">ПРОВЕРИТЬ</button>
+    </div>
+  `;
+  setTimeout(() => {
+    const el = document.getElementById('swDisplay');
+    if (el) el.textContent = '? ? ? ? ? ?';
+  }, 3000);
+  document.getElementById('swBox').querySelectorAll('.switch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.i);
+      switches[i] = !switches[i];
+      btn.classList.toggle('up', switches[i]);
+      btn.innerHTML = `${switches[i]?'▲':'▼'}<small>${i+1}</small>`;
+      sfx.click();
+    });
+  });
+  document.getElementById('swConfirm').addEventListener('click', () => {
+    if (arraysEqual(switches, state._switchesAnswer)) {
+      sfx.correct();
+      log('✔ Тумблеры выставлены. Двигатель запущен!', '#8fffc8');
+      solvedRoom(state.currentRoom);
+    } else {
+      state.mistakes++;
+      sfx.error(); shake(true);
+      state.timeLeft -= 6;
+      punishCreature(5);
+      log('✘ Неверная комбинация. Что-то зашипело за бортом...', '#ff5e5e');
+    }
+  });
+}
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+let mathAnswer = 0;
+function puzzleMath() {
+  const ops = ['+', '-', '*'];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  let a, b, ans;
+  if (op === '+') {
+    a = 5 + Math.floor(Math.random() * 20);
+    b = 5 + Math.floor(Math.random() * 20);
+    ans = a + b;
+  } else if (op === '-') {
+    a = 15 + Math.floor(Math.random() * 20);
+    b = 5 + Math.floor(Math.random() * 15);
+    ans = a - b;
+  } else {
+    a = 3 + Math.floor(Math.random() * 8);
+    b = 3 + Math.floor(Math.random() * 8);
+    ans = a * b;
+  }
+  mathAnswer = ans;
+  const wrongs = new Set();
+  while (wrongs.size < 3) {
+    let w = ans + Math.floor(Math.random() * 21 - 10);
+    if (w > 0 && w !== ans) wrongs.add(w);
+  }
+  const options = [ans, ...wrongs];
+  options.sort(() => Math.random() - 0.5);
+  $taskContent.innerHTML = `
+    <h2>📡 КАПИТАНСКАЯ: ШИФР</h2>
+    <p>Введи код, который скрыт в уравнении. Не ошибись...</p>
+    <div class="code-display" style="letter-spacing:4px;">${a} ${op === '*' ? '×' : op} ${b} = ?</div>
+    <p style="font-size:11px; opacity:0.6;">Выбери правильный ответ (или клавиши 1–4)</p>
+    <div class="math-row" id="mathBox">
+      ${options.map((o, i) => `<button class="math-btn" data-v="${o}">${o}<br><small style="font-size:9px;opacity:0.5">${i+1}</small></button>`).join('')}
+    </div>
+  `;
+  document.getElementById('mathBox').querySelectorAll('.math-btn').forEach(btn => {
+    btn.addEventListener('click', () => handleMath(Number(btn.dataset.v)));
+  });
+}
+function handleMath(v) {
+  if (state.gameOver || state.won) return;
+  if (v === mathAnswer) {
+    sfx.correct();
+    log('✔ Шифр разгадан. Система связи активна.', '#8fffc8');
+    solvedRoom(state.currentRoom);
+  } else {
+    state.mistakes++;
+    sfx.error(); shake();
+    state.timeLeft -= 5;
+    punishCreature(4);
+    log('✘ Неверно. Оно услышало твою ошибку...', '#ff5e5e');
+  }
+}
+
+function solvedRoom(roomIdx) {
+  if (state.roomTasks[roomIdx].done) return;
+  state.roomTasks[roomIdx].done = true;
+  state.repairProgress++;
+  if (state.creatureVisible) {
+    state.creatureDist = Math.min(100, state.creatureDist + 20);
+  }
+  state.timeLeft += 3;
+  sfx.metal();
+  updateHUD();
+  updateMap();
+  updateNav();
+  $taskPanel.classList.remove('show');
+  log(`✔ Система восстановлена (${state.repairProgress}/${TOTAL_ROOMS})`, '#8fffc8');
+  if (state.repairProgress >= TOTAL_ROOMS) {
+    setTimeout(() => winGame(), 1500);
+  }
+}
+function punishCreature(amount) {
+  if (!state.creatureVisible && Math.random() < 0.5) {
+    spawnCreature();
+  }
+  if (state.creatureVisible) {
+    state.creatureDist = Math.max(0, state.creatureDist - amount);
+  }
+}
+
+/* ============ СЛУЧАЙНОЕ СОБЫТИЕ ============ */
+function planRandomEvent() {
+  if (Math.random() < 0.3) {
+    state.eventTriggered = true;
+    return;
+  }
+  state.event = Math.random() < 0.5 ? 'flood' : 'fire';
+  state.eventPlannedAt = 25 + Math.random() * 95;
+}
+function triggerEvent() {
+  if (state.eventTriggered || !state.event) return;
+  state.eventTriggered = true;
+  if (state.event === 'flood') triggerFlood();
+  else if (state.event === 'fire') triggerFire();
+}
+function triggerFlood() {
+  state.timeLeft = Math.max(0, state.timeLeft - 60);
+  sfx.alarmFlood();
+  sfx.waterBurst();
+  startFloodSound();
+  shake(true);
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+  $flood.style.opacity = '1';
+  $leaks.style.opacity = '1';
+  setTimeout(() => { $floodWater.style.height = '65%'; }, 100);
+  for (let i = 0; i < 5; i++) {
+    const leak = document.createElement('div');
+    leak.className = 'leak';
+    leak.style.left = (5 + Math.random() * 90) + '%';
+    leak.style.top = (5 + Math.random() * 40) + '%';
+    leak.style.animationDuration = (1.5 + Math.random() * 1.5) + 's';
+    $leaks.appendChild(leak);
+  }
+  $eventBanner.textContent = '⚠ ЗАТОПЛЕНИЕ ⚠';
+  $eventBanner.className = 'show flood';
+  setTimeout(() => { $eventBanner.className = ''; }, 2600);
+  log('🌊 ПРОРЫВ КОРПУСА! КИСЛОРОД УХОДИТ! −1:00', '#4ebaff', 6000);
+  $alertOverlay.classList.add('show');
+  setTimeout(() => $alertOverlay.classList.remove('show'), 4000);
+}
+function triggerFire() {
+  state.timeLeft = Math.max(0, state.timeLeft - 90);
+  sfx.alarmFire();
+  sfx.fireBurst();
+  startFireSound();
+  shake(true);
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 600]);
+  $fire.style.opacity = '1';
+  for (let i = 0; i < 5; i++) {
+    const flame = document.createElement('div');
+    flame.className = 'flame';
+    flame.style.left = (5 + Math.random() * 90) + '%';
+    flame.style.height = (40 + Math.random() * 40) + 'px';
+    flame.style.width = (20 + Math.random() * 25) + 'px';
+    flame.style.animationDelay = (Math.random() * 0.5) + 's';
+    $fire.appendChild(flame);
+  }
+  $eventBanner.textContent = '⚠ ПОЖАР ⚠';
+  $eventBanner.className = 'show fire';
+  setTimeout(() => { $eventBanner.className = ''; }, 2600);
+  log('🔥 ВОЗГОРАНИЕ В КАБИНЕ! КИСЛОРОД ВЫГОРАЕТ! −1:30', '#ff8800', 6000);
+  $alertOverlay.classList.add('show');
+  setTimeout(() => $alertOverlay.classList.remove('show'), 4000);
+}
+
+/* ============ ГЛАВНЫЙ ЦИКЛ ============ */
+let lastFrame = performance.now();
+function gameLoop(now) {
+  if (!state.gameActive) { lastFrame = now; requestAnimationFrame(gameLoop); return; }
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+
+  if (!state.gameOver && !state.won) {
+    state.timeLeft -= dt;
+    if (state.timeLeft <= 0) {
+      endGame('Кислород закончился. Тишина. Только вода давит на стекло...');
+      return;
+    }
+    const sec = Math.ceil(state.timeLeft);
+    if (state.timeLeft <= 30 && sec !== state.lastTickSecond) {
+      state.lastTickSecond = sec;
+      sfx.tick();
+    }
+
+    state.energy = Math.min(100, state.energy + dt * 4);
+
+    if (!state.eventTriggered && state.event && state.timeLeft <= (210 - state.eventPlannedAt)) {
+      triggerEvent();
+    }
+
+    if (state.creatureVisible && Date.now() > state.fleeingUntil) {
+      state.creatureSpeed = 1 + (210 - state.timeLeft) / 150;
+      state.creatureDist = Math.max(0, state.creatureDist - dt * 1.6 * state.creatureSpeed);
+      state.creatureAngle += (Math.random() - 0.5) * 8;
+      if (state.creatureDist <= 0) {
+        creatureAttack();
+        return;
+      }
+      if (Date.now() - state.lastWhisper > 2500) {
+        state.lastWhisper = Date.now();
+        if (Math.random() < 0.4) sfx.whisper();
+      }
+      if (state.creatureDist < 50) {
+        const hbChance = 0.04 + (50 - state.creatureDist) * 0.004;
+        if (Math.random() < hbChance) {
+          if (state.creatureDist < 25) sfx.heartbeatFast();
+          else sfx.heartbeat();
+        }
+      }
+    } else if (!state.creatureVisible) {
+      if (state.creatureDist < 100) state.creatureDist = Math.min(100, state.creatureDist + dt * 2);
+    }
+
+    // Случайная атака
+    if (now > state.nextAttackCheck) {
+      state.nextAttackCheck = now + (Math.random() * 10000);
+      if (state.creatureVisible && state.creatureDist < 35 && Date.now() > state.fleeingUntil) {
+        const attackChance = (35 - state.creatureDist) / 35 * 0.7;
+        if (Math.random() < attackChance) {
+          log('☠️ ОНО РВАНУЛОСЬ К БАТИСКАФУ!', '#ff0000', 3000);
+          creatureAttack();
+          return;
+        }
+      }
+    }
+
+    const pressure = Math.min(1,
+      (100 - state.creatureDist) / 100 * (state.creatureVisible ? 1 : 0.3)
+      + (1 - state.timeLeft / 210) * 0.3
+      + (state.eventTriggered ? 0.15 : 0));
+    $noise.style.opacity = 0.06 + pressure * 0.14;
+    $vignette.style.background = `radial-gradient(ellipse at center, transparent ${30 - pressure*18}%, rgba(0,0,0,${0.85 - pressure*0.15}) 100%)`;
+    updateDrone(pressure);
+
+    if (pressure > 0.3 && Math.random() < 0.005) {
+      shake(false);
+      playNoise(0.15, 0.06, 400);
+    }
+    if (pressure > 0.5 && Math.random() < 0.003) {
+      const crack = document.createElement('div');
+      crack.className = 'crack';
+      crack.style.left = Math.random() * 100 + '%';
+      crack.style.top = Math.random() * 100 + '%';
+      crack.style.transform = `rotate(${Math.random() * 360}deg)`;
+      crack.style.height = (10 + Math.random() * 40) + 'px';
+      $cabinWindow.appendChild(crack);
+    }
+
+    updateHUD();
+    updateTimer();
+    updateSonar();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+setInterval(() => {
+  if (!state.gameActive || state.gameOver || state.won) return;
+  if (!state.creatureVisible && Date.now() > state.fleeingUntil) {
+    const aggression = 0.4 + (1 - state.timeLeft / 210) * 0.6;
+    if (Math.random() < aggression) spawnCreature();
+  }
+}, 12000);
+setInterval(() => {
+  if (!state.gameActive || state.gameOver || state.won) return;
+  if (Math.random() < 0.3) sfx.metalCreak();
+}, 7000);
+setInterval(() => {
+  if (!state.gameActive || state.gameOver || state.won) return;
+  if (Math.random() < 0.4) sfx.waterDrip();
+}, 4000);
+
+/* ============ КЛАВИАТУРА ============ */
+document.addEventListener('keydown', e => {
+  initAudio();
+  if (state.gameOver || state.won || !state.gameActive) return;
+  if (e.code === 'KeyF') { e.preventDefault(); useFlash(); return; }
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') { e.preventDefault(); moveTo(-1); return; }
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') { e.preventDefault(); moveTo(1); return; }
+  if (e.code === 'KeyE' || e.code === 'Space') {
+    e.preventDefault();
+    if ($taskPanel.classList.contains('show')) return;
+    interact();
+    return;
+  }
+  const room = ROOMS[state.currentRoom];
+  if (room.type === 'symbols' && /^[1-6]$/.test(e.key)) {
+    const syms = document.querySelectorAll('#symChoices .sym');
+    const idx = Number(e.key) - 1;
+    if (syms[idx]) syms[idx].click();
+  }
+  if (room.type === 'wires' && /^[1-4]$/.test(e.key)) {
+    const wires = document.querySelectorAll('#wireBox .wire');
+    const idx = Number(e.key) - 1;
+    if (wires[idx]) wires[idx].click();
+  }
+  if (room.type === 'switches' && /^[1-6]$/.test(e.key)) {
+    const sw = document.querySelectorAll('#swBox .switch');
+    const idx = Number(e.key) - 1;
+    if (sw[idx]) sw[idx].click();
+  }
+  if (room.type === 'math' && /^[1-4]$/.test(e.key)) {
+    const mb = document.querySelectorAll('#mathBox .math-btn');
+    const idx = Number(e.key) - 1;
+    if (mb[idx]) mb[idx].click();
+  }
+});
+
+$navLeft.addEventListener('click', () => moveTo(-1));
+$navRight.addEventListener('click', () => moveTo(1));
+$navAction.addEventListener('click', interact);
+
+/* ============ КОНЕЦ ИГРЫ ============ */
+function endGame(msg) {
+  if (state.gameOver || state.won) return;
+  state.gameOver = true;
+  state.gameActive = false;
+  sfx.roar(); shake(true);
+  document.getElementById('deathMsg').textContent = msg;
+  if (navigator.vibrate) navigator.vibrate([200, 100, 400]);
+  setTimeout(() => document.getElementById('death').classList.add('show'), 1200);
+}
+function winGame() {
+  if (state.gameOver || state.won) return;
+  state.won = true;
+  state.gameActive = false;
+  // Показываем анимацию взлёта через cabinWindow
+  showAscent();
+}
+
+/* ============ АНИМАЦИЯ ПОДЪЁМА ============ */
+function showAscent() {
+  // Скрываем HUD элементы
+  document.getElementById('hud').style.opacity = '0';
+  document.getElementById('timerWrap').style.opacity = '0';
+  document.getElementById('sonar').style.opacity = '0';
+  document.getElementById('map').style.opacity = '0';
+  document.getElementById('navBar').style.opacity = '0';
+  document.getElementById('flashBtn').style.opacity = '0';
+  document.getElementById('taskPanel').classList.remove('show');
+  $log.style.opacity = '0';
+
+  // Останавливаем дрон постепенно
+  if (ambientDrone) {
+    try {
+      ambientDrone.g.gain.setTargetAtTime(0, actx.currentTime, 2);
+    } catch(e){}
+  }
+
+  // Плавно меняем фон кабины на светлеющий
+  $oceanView.style.transition = 'background 8s';
+  $oceanView.style.background = 'radial-gradient(ellipse at 50% 50%, #4a9ac0 0%, #2a6a8a 40%, #0a2a4a 100%)';
+  $cabinWindow.style.transition = 'box-shadow 6s';
+  $cabinWindow.style.boxShadow = 'inset 0 0 100px rgba(255,255,255,0.3), 0 0 100px rgba(150,220,255,0.7)';
+  // Убираем существо
+  $creature.classList.remove('visible');
+  // Скрываем все помехи
+  $noise.style.opacity = '0';
+  $vignette.style.opacity = '0';
+  $flood.style.opacity = '0';
+  $fire.style.opacity = '0';
+  $alertOverlay.classList.remove('show');
+
+  // Звук подъёма
+  sfx.subRise();
+
+  // Через 2 секунды — показываем концовку
+  setTimeout(() => {
+    stopDrone();
+    // Определяем тип концовки
+    const isSecret = state.mistakes === 0 && !state.eventTriggered;
+    if (isSecret) {
+      showEnding('secret');
+    } else {
+      showEnding('good');
+    }
+  }, 2500);
+}
+
+/* ============ ПОКАЗ КОНЦОВОК ============ */
+function showEnding(type) {
+  // Скрываем всё игровое
+  document.getElementById('game').style.opacity = '0';
+  document.getElementById('game').style.transition = 'opacity 0.5s';
+
+  setTimeout(() => {
+    if (type === 'good') {
+      document.getElementById('endingGood').classList.add('show');
+      sfx.endingGood();
+    } else if (type === 'bad') {
+      document.getElementById('endingBad').classList.add('show');
+      sfx.endingBad();
+    } else if (type === 'secret') {
+      document.getElementById('endingSecret').classList.add('show');
+      sfx.endingSecret();
+    }
+  }, 500);
+}
+
+/* ============ СТАРТ ============ */
+function startGame() {
+  initAudio();
+  startDrone();
+  planRandomEvent();
+  state.gameActive = true;
+  state.nextAttackCheck = performance.now() + (Math.random() * 10000);
+  lastFrame = performance.now();
+  $intro.style.display = 'none';
+  applyInterior();
+  updateMap();
+  updateNav();
+  updateTimer();
+  log('💡 Нажми ⚙ РЕМОНТ в каждом отсеке', '#8fffc8', 5000);
+}
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('ctrlBtn').addEventListener('click', () => {
+  document.getElementById('controls').classList.add('show');
+});
+function unlockAudio() {
+  initAudio();
+  if (actx) {
+    try {
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+      g.gain.value = 0.001;
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + 0.01);
+    } catch(e){}
+  }
+  document.removeEventListener('touchstart', unlockAudio);
+  document.removeEventListener('click', unlockAudio);
+  document.removeEventListener('touchend', unlockAudio);
+}
+document.addEventListener('touchstart', unlockAudio);
+document.addEventListener('click', unlockAudio);
+document.addEventListener('touchend', unlockAudio);
+
+requestAnimationFrame(gameLoop);
+updateTimer();
+buildMap();
+updateMap();
+</script>
+<script>
+  document.addEventListener('backbutton', function(e) {
+    e.preventDefault();
+    if (confirm('Выйти из игры?')) {
+      navigator.app && navigator.app.exitApp();
+    }
+  }, false);
+</script>
+</body>
+</html>
